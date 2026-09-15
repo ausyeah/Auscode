@@ -30,6 +30,36 @@ Authorization: Bearer <credential.txt 中的 Token>
 
 重新签发 Token：`set AUSCODE_HOME=D:\AusCode\data && venv\Scripts\python.exe tools\bootstrap_token.py`
 
+## 怎么验收
+
+先保证服务在跑：双击 `auscode-start.vbs`，等几秒。然后分两层：
+
+### 1. 一键机检（推荐先跑这个）
+
+双击 `D:\AusCode\run-acceptance.bat`。会自动检查健康、鉴权、已删功能 404、插件/知识库/浏览器/cron/记忆接口。刚才实测 **17/17 通过**。
+
+### 2. 在接口说明书里手动试（你现在打开的页面）
+
+打开 [http://127.0.0.1:8089/api/docs](http://127.0.0.1:8089/api/docs)。页面顶部找到 **Auth**（或锁形图标），选 Bearer，把 `data\credential.txt` 里那串以 `eyJ` 开头的 Token 贴进去。之后每个接口右侧的 **Try it** 都会自动带上 Token。
+
+建议按这个顺序点：
+
+1. `GET /api/health` —— 不需要 Token，应返回 200
+2. `GET /api/agents` —— 应看到 agent `TV3AHW`（name=`main`）
+3. `GET /api/plugins`、`GET /api/knowledge-bases`、`GET /api/browser/env-status`
+4. 随便点一个已删接口（例如 `GET /api/channels` 或 `GET /api/voice/providers`）—— 应 404
+
+### 3. 还差的两步人工项（必须先配模型）
+
+机检不会替你发真实对话。在 `/api/docs` 里：
+
+1. `GET /api/setup/presets` 看支持哪些厂商
+2. `POST /api/providers` 填入 API Key 和模型
+3. 再调对话接口（通常是 agent 下的 chat / 流式接口）发一句「你好」
+4. 浏览器自动化同理：配好模型后让 agent 打开一个网页
+
+没配模型时 agent 会报 `no_models_configured`，这是预期，不是故障。
+
 ## 接入大模型（首次使用前必做）
 
 默认未预配任何模型 provider。用 Token 调 `POST /api/providers`（或 `GET /api/setup/presets`
