@@ -79,7 +79,7 @@ def resolve_usage_window(
     """Map a window alias to ``[start, end)`` unix seconds in *timezone*.
 
     Supported:
-      today | yesterday | last_7d | last_30d | all
+      today | yesterday | last_5h | last_7d | last_30d | all
       day:YYYY-MM-DD | month:YYYY-MM
       range:YYYY-MM-DD:YYYY-MM-DD  (inclusive calendar days)
     """
@@ -119,6 +119,8 @@ def resolve_usage_window(
     if window.startswith("day:") or window.startswith("month:") or window.startswith("range:"):
         raise ValueError(f"invalid usage window: {window!r}")
 
+    if window == "last_5h":
+        return now_ts_val - 5 * 3600, end_open
     if window == "today":
         start_dt = now_dt.replace(hour=0, minute=0, second=0, microsecond=0)
         return int(start_dt.timestamp()), end_open

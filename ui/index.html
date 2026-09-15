@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AusCode</title>
-  <link rel="stylesheet" href="/ui-assets/styles.css?v=9" />
+  <link rel="stylesheet" href="/ui-assets/styles.css?v=12" />
 </head>
 <body>
   <div class="app">
@@ -21,10 +21,10 @@
         <button data-page="settings">设置</button>
       </nav>
       <div class="usage-card" id="usageMini">
-        <h4>本月用量</h4>
-        <div class="big" id="usageTotal">—</div>
+        <h4>近 5 小时</h4>
+        <div class="big" id="usage5h">—</div>
+        <p id="usageToday">今日 —</p>
         <p id="usageHit">缓存命中 —</p>
-        <p id="usageIo">输入 — / 输出 —</p>
       </div>
     </aside>
     <main class="stage">
@@ -119,6 +119,6 @@
       </section>
     </main>
   </div>
-  <script src="/ui-assets/app.js?v=9"></script>
+  <script src="/ui-assets/app.js?v=12"></script>
 </body>
 </html>

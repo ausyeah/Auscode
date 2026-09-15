@@ -400,31 +400,101 @@ async function refreshContext() {
   } catch {}
 }
 
+state.usageWindow = state.usageWindow || "last_7d";
+const MODEL_COLORS = ["#8eabc0", "#8aa58a", "#b7aec8", "#c4a090", "#d6c48a", "#9bb8b0", "#c9b6a4"];
+
 async function refreshUsage() {
-  const u = await api("/api/usage/summary");
-  $("usageTotal").textContent = fmt(u.total_tokens);
-  $("usageHit").textContent = `缓存命中 ${u.cache_hit_percent ?? 0}%`;
-  $("usageIo").textContent = `输入 ${fmt(u.input_tokens)} / 输出 ${fmt(u.output_tokens)}`;
+  const [u5, today] = await Promise.all([
+    api("/api/usage/summary?window=last_5h&granularity=total"),
+    api("/api/usage/summary?window=today&granularity=total"),
+  ]);
+  $("usage5h").textContent = fmt(u5.total_tokens);
+  $("usageToday").textContent = `今日 ${fmt(today.total_tokens)}`;
+  $("usageHit").textContent = `今日命中 ${today.cache_hit_percent ?? 0}%`;
+  if (!$("usageBox")) return;
+  const win = state.usageWindow;
+  const [day, models] = await Promise.all([
+    api(`/api/usage/summary?window=${win}&granularity=by_day`),
+    api(`/api/usage/summary?window=${win}&granularity=by_model`),
+  ]);
+  const u = day;
+  const hit = Number(u.cache_hit_percent || 0);
+  const buckets = u.buckets || [];
+  const maxDay = Math.max(1, ...buckets.map((b) => Number(b.total_tokens || 0)));
+  const peak = Math.max(0, ...buckets.map((b) => Number(b.total_tokens || 0)));
+  const modelRows = (models.buckets || []).map((b) => ({
+    name: b.label || b.key || b.model || "未知",
+    tokens: Number(b.total_tokens || 0),
+  })).sort((a, b) => b.tokens - a.tokens);
+  const modelTotal = modelRows.reduce((s, r) => s + r.tokens, 0) || 1;
+  let acc = 0;
+  const stops = modelRows.map((r, i) => {
+    const start = acc;
+    acc += r.tokens / modelTotal;
+    return `${MODEL_COLORS[i % MODEL_COLORS.length]} ${start}turn ${acc}turn`;
+  }).join(", ");
+  const heat = buckets.map((b) => {
+    const ratio = Number(b.total_tokens || 0) / maxDay;
+    const alpha = 0.12 + ratio * 0.88;
+    return `<i title="${b.label} ${fmt(b.total_tokens)}" style="background:rgba(138,165,138,${alpha})"></i>`;
+  }).join("");
+  const dayCols = buckets.slice(-14).map((b) => {
+    const total = Number(b.total_tokens || 0) || 1;
+    const h = Math.max(8, Math.round(Number(b.total_tokens || 0) * 128 / maxDay));
+    const inP = Math.round(Number(b.uncached_input_tokens || b.input_tokens || 0) * 100 / total);
+    const caP = Math.round(Number(b.cache_read_tokens || 0) * 100 / total);
+    const ouP = Math.max(0, 100 - inP - caP);
+    return `<div class="chart-col" title="${b.label} 合计 ${fmt(b.total_tokens)}">
+      <div class="chart-stack" style="height:${h}px">
+        <i class="in" style="height:${inP}%"></i>
+        <i class="ca" style="height:${caP}%"></i>
+        <i class="ou" style="height:${ouP}%"></i>
+      </div>
+      <em>${String(b.label || "").slice(5)}</em>
+    </div>`;
+  }).join("");
+  const winBtns = [["today","今日"],["last_7d","近 7 日"],["last_30d","近 30 日"],["all","累计"]].map(([id, label]) =>
+    `<button data-win="${id}" class="${id === win ? "on" : ""}">${label}</button>`
+  ).join("");
   $("usageBox").innerHTML = `
-    <h3>Token 统计</h3>
-    <p style="color:var(--muted);margin:0 0 8px">来自 AusCode 用量接口，按日汇总。</p>
-    <div class="kv"><span>总 token</span><b>${fmt(u.total_tokens)}</b></div>
-    <div class="kv"><span>输入 / 未缓存</span><b>${fmt(u.input_tokens)} / ${fmt(u.uncached_input_tokens)}</b></div>
-    <div class="kv"><span>缓存读取</span><b>${fmt(u.cache_read_tokens)}（命中 ${u.cache_hit_percent}%）</b></div>
-    <div class="kv"><span>输出 / 思考</span><b>${fmt(u.output_tokens)} / ${fmt(u.reasoning_tokens)}</b></div>
-    <div class="kv"><span>调用 / 轮次</span><b>${u.model_calls} / ${u.turns}</b></div>
-    <div class="kv"><span>平均每轮</span><b>${fmt(u.avg_per_turn)}</b></div>
-    <h4>按日</h4>
-    ${(u.buckets || []).map((b) => `
-      <div class="list-item">
-        <b>${b.label}</b>
-        <div style="color:var(--muted)">入 ${fmt(b.input_tokens)} · 缓存 ${fmt(b.cache_read_tokens)} · 出 ${fmt(b.output_tokens)} · 合计 ${fmt(b.total_tokens)}</div>
-      </div>`).join("") || "<p>还没有用量</p>"}
+    <h3>使用统计</h3>
+    <div class="seg">${winBtns}</div>
+    <div class="stat-grid">
+      <div class="stat-card input"><span>累计 Token</span><b>${fmt(u.total_tokens)}</b></div>
+      <div class="stat-card cache"><span>峰值（单日）</span><b>${fmt(peak)}</b></div>
+      <div class="stat-card output"><span>调用 / 轮次</span><b>${u.model_calls} / ${u.turns}</b></div>
+      <div class="stat-card think"><span>缓存命中</span><b>${hit}%</b></div>
+    </div>
+    <div class="hit-wrap">
+      <div class="kv" style="border:0;padding-top:0"><span>Token 活动</span><b>${buckets.length} 天</b></div>
+      <div class="heat">${heat || "<p>还没有用量</p>"}</div>
+    </div>
+    <div class="hit-wrap">
+      <div class="kv" style="border:0;padding-top:0"><span>每日趋势</span><b>${fmt(u.total_tokens)}</b></div>
+      <div class="legend">
+        <span><i class="ca"></i>缓存</span>
+        <span><i class="in"></i>输入</span>
+        <span><i class="ou"></i>输出</span>
+      </div>
+      <div class="chart">${dayCols || "<p>还没有用量</p>"}</div>
+    </div>
+    <div class="hit-wrap">
+      <div class="kv" style="border:0;padding-top:0"><span>模型用量</span><b></b></div>
+      <div class="donut-wrap">
+        <div class="donut" style="background:conic-gradient(${stops || "#eee4d6 0 1turn"})" data-label="${fmt(modelTotal)}\ntokens"></div>
+        <div class="model-list">
+          ${modelRows.map((r, i) => `<div class="kv"><span><i class="dot" style="background:${MODEL_COLORS[i % MODEL_COLORS.length]}"></i> ${r.name}</span><b>${Math.round(r.tokens * 100 / modelTotal)}% · ${fmt(r.tokens)}</b></div>`).join("") || "<p>还没有按模型拆分</p>"}
+        </div>
+      </div>
+    </div>
     <p><button class="ghost" id="usageExport">导出 Excel</button></p>
   `;
+  $("usageBox").querySelectorAll("[data-win]").forEach((btn) => {
+    btn.onclick = () => { state.usageWindow = btn.dataset.win; refreshUsage(); };
+  });
   const exp = $("usageExport");
   if (exp) exp.onclick = async () => {
-    const res = await fetch("/api/usage/export.xlsx", { headers: { Authorization: `Bearer ${state.token}` } });
+    const res = await fetch(`/api/usage/export.xlsx?window=${win}`, { headers: { Authorization: `Bearer ${state.token}` } });
     const blob = await res.blob();
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);

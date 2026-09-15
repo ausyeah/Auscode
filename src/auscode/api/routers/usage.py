@@ -8,7 +8,7 @@
   GET /api/admin/usage/export.xlsx   → Excel detail (admin only)
 
 Query params:
-  window      = today | yesterday | last_7d | last_30d | all
+  window      = today | yesterday | last_5h | last_7d | last_30d | all
                 | day:YYYY-MM-DD | month:YYYY-MM
                 | range:YYYY-MM-DD:YYYY-MM-DD   (default last_30d)
   granularity = total | by_day | by_agent | by_model            (default by_day)
