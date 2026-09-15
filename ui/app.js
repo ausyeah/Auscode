@@ -20,9 +20,8 @@ const PERM = {
 
 const $ = (id) => document.getElementById(id);
 const titles = {
-  chat: "当前会话", experts: "专家", cron: "自动化", usage: "Token 统计",
-  workspace: "工作台", knowledge: "知识库", memory: "记忆", models: "模型",
-  plugins: "插件", security: "权限", settings: "设置",
+  chat: "当前会话", cron: "自动化", usage: "Token 统计", knowledge: "知识库",
+  models: "模型", plugins: "插件", security: "权限", settings: "设置",
 };
 
 async function api(path, opts = {}) {
@@ -230,14 +229,31 @@ async function refreshUsage() {
   $("usageHit").textContent = `缓存命中 ${u.cache_hit_percent ?? 0}%`;
   $("usageIo").textContent = `输入 ${fmt(u.input_tokens)} / 输出 ${fmt(u.output_tokens)}`;
   $("usageBox").innerHTML = `
-    <h3>用量</h3>
+    <h3>Token 统计</h3>
+    <p style="color:var(--muted);margin:0 0 8px">来自 AusCode 用量接口，按日汇总。</p>
     <div class="kv"><span>总 token</span><b>${fmt(u.total_tokens)}</b></div>
     <div class="kv"><span>输入 / 未缓存</span><b>${fmt(u.input_tokens)} / ${fmt(u.uncached_input_tokens)}</b></div>
-    <div class="kv"><span>缓存读取</span><b>${fmt(u.cache_read_tokens)}（${u.cache_hit_percent}%）</b></div>
+    <div class="kv"><span>缓存读取</span><b>${fmt(u.cache_read_tokens)}（命中 ${u.cache_hit_percent}%）</b></div>
     <div class="kv"><span>输出 / 思考</span><b>${fmt(u.output_tokens)} / ${fmt(u.reasoning_tokens)}</b></div>
     <div class="kv"><span>调用 / 轮次</span><b>${u.model_calls} / ${u.turns}</b></div>
-    ${(u.buckets || []).map((b) => `<div class="list-item">${b.label} · ${fmt(b.total_tokens)}</div>`).join("")}
+    <div class="kv"><span>平均每轮</span><b>${fmt(u.avg_per_turn)}</b></div>
+    <h4>按日</h4>
+    ${(u.buckets || []).map((b) => `
+      <div class="list-item">
+        <b>${b.label}</b>
+        <div style="color:var(--muted)">入 ${fmt(b.input_tokens)} · 缓存 ${fmt(b.cache_read_tokens)} · 出 ${fmt(b.output_tokens)} · 合计 ${fmt(b.total_tokens)}</div>
+      </div>`).join("") || "<p>还没有用量</p>"}
+    <p><button class="ghost" id="usageExport">导出 Excel</button></p>
   `;
+  const exp = $("usageExport");
+  if (exp) exp.onclick = async () => {
+    const res = await fetch("/api/usage/export.xlsx", { headers: { Authorization: `Bearer ${state.token}` } });
+    const blob = await res.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "auscode-usage.xlsx";
+    a.click();
+  };
 }
 
 async function loadModels() {
@@ -256,9 +272,6 @@ async function loadModels() {
       $("modelSelect").selectedIndex = 0;
     }
   } catch {}
-  $("modelsBox").innerHTML = "<h3>已接入模型</h3>" + state.models.map((m) =>
-    `<div class="list-item"><b>${m.provider_name}</b> · ${m.model}</div>`
-  ).join("");
 }
 
 function showPage(name) {
@@ -271,43 +284,168 @@ function showPage(name) {
   $("crumb").textContent = titles[name] || name;
   $("pageTitle").textContent = titles[name] || name;
   const loaders = {
-    experts: loadExperts, cron: loadCron, usage: refreshUsage, workspace: loadWorkspace,
-    knowledge: loadKnowledge, memory: loadMemory, models: loadModels, plugins: loadPlugins, security: loadSecurity,
+    cron: loadCron, usage: refreshUsage, knowledge: loadKnowledge,
+    models: loadModelPage, plugins: loadPlugins, security: loadSecurity,
   };
   if (loaders[name]) loaders[name]();
 }
 
-async function loadExperts() {
-  const rows = await api("/api/experts");
-  $("expertsBox").innerHTML = "<h3>专家</h3>" + (rows || []).map((e) =>
-    `<div class="list-item"><b>${e.name || e.id}</b><div style="color:var(--muted)">${e.description || ""}</div></div>`
-  ).join("") || "<p>暂无专家</p>";
-}
 async function loadCron() {
   const rows = await api(`/api/agents/${state.agentId}/cron`);
-  $("cronBox").innerHTML = "<h3>定时任务</h3>" + (rows || []).map((c) =>
-    `<div class="list-item"><b>${c.name || c.cron_id}</b> · ${c.schedule || c.expr || ""}</div>`
-  ).join("") || "<p>还没有定时任务</p>";
+  $("cronBox").innerHTML = `
+    <h3>自动化</h3>
+    <p style="color:var(--muted);margin:0">用 cron 或 @every 表达式定时让助手跑一句提示词。</p>
+    <div class="form-grid">
+      <input id="cronName" placeholder="名称，可选" />
+      <input id="cronTrigger" placeholder="例如 @every 1h 或 0 9 * * *" />
+    </div>
+    <textarea id="cronPrompt" placeholder="到点要执行的提示词"></textarea>
+    <div class="row"><button class="primary" id="cronAdd">添加任务</button></div>
+    <div id="cronMsg" style="color:var(--muted)"></div>
+    ${(rows || []).map((c) => `
+      <div class="list-item">
+        <b>${c.name || c.cron_id}</b>
+        <div style="color:var(--muted)">${c.trigger || c.schedule || ""} · ${c.enabled === false ? "停用" : "启用"}</div>
+        <button class="ghost" data-run="${c.cron_id || c.id}">立即跑一次</button>
+        <button class="ghost" data-del="${c.cron_id || c.id}">删除</button>
+      </div>`).join("") || "<p>还没有定时任务</p>"}
+  `;
+  $("cronAdd").onclick = async () => {
+    try {
+      await api(`/api/agents/${state.agentId}/cron`, {
+        method: "POST",
+        body: JSON.stringify({
+          name: $("cronName").value.trim() || null,
+          trigger: $("cronTrigger").value.trim(),
+          prompt: $("cronPrompt").value.trim(),
+        }),
+      });
+      loadCron();
+    } catch (err) { $("cronMsg").textContent = String(err.message || err); }
+  };
+  $("cronBox").onclick = async (e) => {
+    const run = e.target.dataset.run;
+    const del = e.target.dataset.del;
+    if (run) await api(`/api/agents/${state.agentId}/cron/${run}/run-now`, { method: "POST" });
+    if (del) await api(`/api/agents/${state.agentId}/cron/${del}`, { method: "DELETE" });
+    if (run || del) loadCron();
+  };
 }
-async function loadWorkspace() {
-  const tree = await api(`/api/agents/${state.agentId}/workspace/tree`);
-  $("workspaceBox").innerHTML = "<h3>工作区</h3><pre>" + JSON.stringify(tree, null, 2).slice(0, 4000) + "</pre>";
-}
+
 async function loadKnowledge() {
   const rows = await api("/api/knowledge-bases");
-  $("knowledgeBox").innerHTML = "<h3>知识库</h3>" + (rows || []).map((k) =>
-    `<div class="list-item"><b>${k.name || k.id}</b></div>`
-  ).join("") || "<p>还没有知识库</p>";
+  $("knowledgeBox").innerHTML = `
+    <h3>知识库</h3>
+    <p style="color:var(--muted);margin:0">先建库，再贴一段文本进去。对话时助手可以检索这些资料。</p>
+    <div class="form-grid">
+      <input id="kbName" placeholder="知识库名称" />
+      <input id="kbDesc" placeholder="说明，可选" />
+    </div>
+    <div class="row"><button class="primary" id="kbAdd">新建知识库</button></div>
+    <div id="kbMsg" style="color:var(--muted)"></div>
+    ${(rows || []).map((k) => {
+      const id = k.id || k.kb_id || k.base_id;
+      return `<div class="list-item" data-kbid="${id}">
+        <b>${k.name || id}</b>
+        <div style="color:var(--muted)">${k.description || ""}</div>
+        <textarea data-content="${id}" placeholder="粘贴要入库的文本"></textarea>
+        <div class="row">
+          <input data-title="${id}" placeholder="文件名，例如 notes.md" />
+          <button class="ghost" data-upload="${id}">写入文本</button>
+          <button class="ghost" data-delkb="${id}">删除库</button>
+        </div>
+      </div>`;
+    }).join("") || "<p>还没有知识库</p>"}
+  `;
+  $("kbAdd").onclick = async () => {
+    try {
+      await api("/api/knowledge-bases", {
+        method: "POST",
+        body: JSON.stringify({ name: $("kbName").value.trim(), description: $("kbDesc").value.trim() }),
+      });
+      loadKnowledge();
+    } catch (err) { $("kbMsg").textContent = String(err.message || err); }
+  };
+  $("knowledgeBox").onclick = async (e) => {
+    const upload = e.target.dataset.upload;
+    const del = e.target.dataset.delkb;
+    try {
+      if (upload) {
+        const box = e.target.closest(".list-item");
+        const name = box.querySelector(`[data-title="${upload}"]`).value.trim() || "note.md";
+        const content = box.querySelector(`[data-content="${upload}"]`).value;
+        await api(`/api/knowledge-bases/${upload}/documents/text`, {
+          method: "POST",
+          body: JSON.stringify({ name, format: name.endsWith(".txt") ? "txt" : "md", content }),
+        });
+        $("kbMsg").textContent = "已写入";
+      }
+      if (del) {
+        await api(`/api/knowledge-bases/${del}`, { method: "DELETE" });
+        loadKnowledge();
+      }
+    } catch (err) { $("kbMsg").textContent = String(err.message || err); }
+  };
 }
-async function loadMemory() {
-  const stats = await api(`/api/agents/${state.agentId}/memory/stats/counts`);
-  $("memoryBox").innerHTML = "<h3>记忆</h3><pre>" + JSON.stringify(stats, null, 2) + "</pre>";
+
+async function loadModelPage() {
+  await loadModels();
+  const providers = await api("/api/providers");
+  $("modelsBox").innerHTML = `
+    <h3>模型</h3>
+    <p style="color:var(--muted);margin:0">这里管理已接入的供应商。新增 Key 请到「设置」。</p>
+    ${(providers || []).map((p) => `
+      <div class="list-item">
+        <b>${p.name}</b> · ${p.kind} · ${p.enabled ? "启用" : "停用"}
+        <div style="color:var(--muted)">${p.base_url || ""}</div>
+        <div>${(p.models || []).map((m) => m.id || m.name).join("、") || "还没拉模型"}</div>
+        <button class="ghost" data-toggle="${p.id}">${p.enabled ? "停用" : "启用"}</button>
+        <button class="ghost" data-test="${p.id}" data-mid="${(p.models && p.models[0] && p.models[0].id) || ""}">测通</button>
+      </div>`).join("")}
+    <div id="modelMsg" style="color:var(--muted)"></div>
+  `;
+  $("modelsBox").onclick = async (e) => {
+    const toggle = e.target.dataset.toggle;
+    const test = e.target.dataset.test;
+    try {
+      if (toggle) {
+        const row = (providers || []).find((p) => String(p.id) === String(toggle));
+        await api(`/api/admin/providers/${toggle}`, {
+          method: "PATCH",
+          body: JSON.stringify({ enabled: !row.enabled }),
+        });
+        loadModelPage();
+      }
+      if (test) {
+        const mid = e.target.dataset.mid;
+        const r = await api(`/api/admin/providers/${test}/test`, {
+          method: "POST",
+          body: JSON.stringify({ model_id: mid }),
+        });
+        $("modelMsg").textContent = r.ok ? `测通 ${r.latency_ms} ms` : "测通失败";
+      }
+    } catch (err) { $("modelMsg").textContent = String(err.message || err); }
+  };
 }
+
 async function loadPlugins() {
   const rows = await api("/api/plugins");
   $("pluginsBox").innerHTML = "<h3>插件</h3>" + (rows || []).map((p) =>
-    `<div class="list-item"><b>${p.name || p.id}</b> · ${p.enabled ? "启用" : "停用"}</div>`
-  ).join("");
+    `<div class="list-item">
+      <b>${p.name || p.id}</b>
+      <div style="color:var(--muted)">${p.description || ""}</div>
+      <button class="ghost" data-plugin="${p.id}" data-on="${p.enabled ? "0" : "1"}">${p.enabled ? "停用" : "启用"}</button>
+    </div>`
+  ).join("") || "<p>没有插件</p>";
+  $("pluginsBox").onclick = async (e) => {
+    const id = e.target.dataset.plugin;
+    if (!id) return;
+    await api(`/api/plugins/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabled: e.target.dataset.on === "1" }),
+    });
+    loadPlugins();
+  };
 }
 async function loadSecurity() {
   const pol = await api("/api/admin/security");
