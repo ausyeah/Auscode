@@ -95,12 +95,13 @@ body {
 .thread b { font-weight: 700; }
 .thread small { display: block; color: var(--muted); margin-top: 4px; font-weight: 400; }
 .thread .del {
-  position: absolute; right: 8px; top: 10px;
-  border: 0; background: transparent; color: var(--accent);
-  opacity: 0; cursor: pointer; font-size: 16px; line-height: 1;
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  width: 28px; height: 28px; border: 0; border-radius: 8px;
+  background: transparent; color: #c45c5c; cursor: pointer;
+  font-size: 18px; line-height: 28px; opacity: 0; z-index: 2;
 }
-.thread:hover .del { opacity: 0.85; }
-.thread .del:hover { opacity: 1; color: #c12b1a; }
+.thread:hover .del { opacity: 0.9; }
+.thread .del:hover { opacity: 1; background: #f7e4e4; }
 .chat-main { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; min-height: 0; }
 .stats {
   display: flex; gap: 16px; flex-wrap: wrap; padding: 12px 16px;

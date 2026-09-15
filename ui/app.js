@@ -631,12 +631,14 @@ async function loadThreads() {
     el.innerHTML = `<b>${t.title || "未命名"}</b><small>${t.channel_type || ""}</small><button type="button" class="del" title="删除" data-del="${t.thread_id}">×</button>`;
     box.appendChild(el);
   });
-  box.onclick = async (e) => {
+  box.onpointerdown = async (e) => {
     const del = e.target.closest("[data-del]");
-    if (del) {
-      e.preventDefault();
-      e.stopPropagation();
-      const id = del.dataset.del;
+    if (!del) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const id = del.dataset.del;
+    if (!id) return;
+    try {
       await api(`/api/agents/${state.agentId}/threads/${id}`, { method: "DELETE" });
       if (state.threadId === id) {
         state.threadId = "";
@@ -644,9 +646,13 @@ async function loadThreads() {
         $("messages").innerHTML = "";
         $("pageTitle").textContent = "当前会话";
       }
-      loadThreads();
-      return;
+      await loadThreads();
+    } catch (err) {
+      console.warn(err);
     }
+  };
+  box.onclick = (e) => {
+    if (e.target.closest("[data-del]")) return;
     const item = e.target.closest(".thread");
     if (item && item.dataset.thread) openThread(item.dataset.thread);
   };
