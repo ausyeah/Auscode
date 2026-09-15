@@ -451,24 +451,28 @@ async function loadThreads() {
   (rows || []).forEach((t) => {
     const el = document.createElement("div");
     el.className = "thread" + (t.thread_id === state.threadId ? " active" : "");
-    el.innerHTML = `<b>${t.title || "未命名"}</b><small>${t.channel_type || ""}</small><button class="del" title="删除" data-del="${t.thread_id}">×</button>`;
-    el.onclick = (e) => {
-      if (e.target.dataset.del) return;
-      openThread(t.thread_id);
-    };
+    el.dataset.thread = t.thread_id;
+    el.innerHTML = `<b>${t.title || "未命名"}</b><small>${t.channel_type || ""}</small><button type="button" class="del" title="删除" data-del="${t.thread_id}">×</button>`;
     box.appendChild(el);
   });
   box.onclick = async (e) => {
-    const id = e.target.dataset.del;
-    if (!id) return;
-    e.stopPropagation();
-    await api(`/api/agents/${state.agentId}/threads/${id}`, { method: "DELETE" });
-    if (state.threadId === id) {
-      state.threadId = "";
-      $("messages").innerHTML = "";
-      $("pageTitle").textContent = "当前会话";
+    const del = e.target.closest("[data-del]");
+    if (del) {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = del.dataset.del;
+      await api(`/api/agents/${state.agentId}/threads/${id}`, { method: "DELETE" });
+      if (state.threadId === id) {
+        state.threadId = "";
+        localStorage.removeItem("auscode.thread");
+        $("messages").innerHTML = "";
+        $("pageTitle").textContent = "当前会话";
+      }
+      loadThreads();
+      return;
     }
-    loadThreads();
+    const item = e.target.closest(".thread");
+    if (item && item.dataset.thread) openThread(item.dataset.thread);
   };
 }
 
