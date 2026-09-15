@@ -46,10 +46,38 @@ function fmt(n) {
   return String(n);
 }
 
+function modelRefOf(m) {
+  if (!m) return "";
+  if (m.ref) return m.ref;
+  if (m.model && String(m.model).includes("/")) return m.model;
+  const name = m.provider_name || "";
+  const id = m.model || m.name || m.id || "";
+  return name && id ? `${name}/${id}` : String(id);
+}
+
+function extractText(content) {
+  if (content == null) return "";
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map((part) => {
+      if (typeof part === "string") return part;
+      if (!part || typeof part !== "object") return "";
+      if (part.type === "text") return part.text || "";
+      if (part.type === "thinking") return "";
+      return part.text || part.content || "";
+    }).filter(Boolean).join("\n");
+  }
+  if (typeof content === "object") {
+    if (content.text) return String(content.text);
+    if (content.content) return extractText(content.content);
+  }
+  return "";
+}
+
 function addBubble(role, text) {
   const el = document.createElement("div");
   el.className = `bubble ${role}`;
-  el.textContent = text;
+  el.textContent = extractText(text) || (typeof text === "string" ? text : "");
   $("messages").appendChild(el);
   $("messages").scrollTop = $("messages").scrollHeight;
   return el;
@@ -87,8 +115,8 @@ function connectWs() {
     if (t === "token" || t === "text" || t === "delta") {
       const piece = frame.content || frame.text || frame.delta || "";
       if (!piece) return;
-      if (!assistantEl) assistantEl = addBubble("assistant", "");
-      assistantEl.textContent += piece;
+            if (!assistantEl) assistantEl = addBubble("assistant", "");
+            assistantEl.textContent += extractText(piece) || String(piece);
       state.outTokens += 1;
       const sec = Math.max(0.001, (Date.now() - state.startedAt) / 1000);
       $("tokSpeed").textContent = `${Math.round(state.outTokens / sec)} tok/s`;
@@ -111,12 +139,15 @@ function connectWs() {
       refreshUsage();
     }
     if (t === "error" || t === "turn_error") addBubble("think", frame.message || JSON.stringify(frame));
-    if (t === "state_snapshot") {
+        if (t === "state_snapshot") {
       const msgs = (frame.data && frame.data.messages) || [];
       const last = msgs[msgs.length - 1];
-      if (last && last.type === "ai" && last.content) {
-        if (!assistantEl) assistantEl = addBubble("assistant", "");
-        assistantEl.textContent = String(last.content);
+      if (last && (last.type === "ai" || last.role === "assistant") && last.content) {
+        const visible = extractText(last.content);
+        if (visible) {
+          if (!assistantEl) assistantEl = addBubble("assistant", "");
+          assistantEl.textContent = visible;
+        }
       }
     }
     if (t === "hitl_required") addBubble("think", "需要确认后才能继续。请在权限档位中选择，或回复批准。");
@@ -172,11 +203,13 @@ async function openThread(id) {
   const msgs = hist.messages || hist.items || [];
   msgs.forEach((m) => {
     const role = m.role || m.type;
-    const content = typeof m.content === "string" ? m.content : JSON.stringify(m.content || "");
+    const content = extractText(m.content);
+    if (!content) return;
     if (role === "user" || role === "human") addBubble("user", content);
     else if (role === "assistant" || role === "ai") addBubble("assistant", content);
   });
-  $("pageTitle").textContent = (msgs[0] && (msgs[0].content || "").slice(0, 24)) || "当前会话";
+  const first = extractText(msgs[0] && msgs[0].content);
+  $("pageTitle").textContent = (first || "当前会话").slice(0, 24);
   await loadThreads();
   await refreshContext();
 }
@@ -210,12 +243,18 @@ async function refreshUsage() {
 async function loadModels() {
   const rows = await api("/api/providers/resolved");
   state.models = rows || [];
-  $("modelSelect").innerHTML = state.models.map((m) =>
-    `<option value="${m.model}">${m.provider_name} / ${m.name}</option>`
-  ).join("");
+  $("modelSelect").innerHTML = state.models.map((m) => {
+    const ref = modelRefOf(m);
+    return `<option value="${ref}">${m.provider_name} / ${m.name}</option>`;
+  }).join("");
   try {
     const active = await api("/api/providers/active-model");
-    if (active.model) $("modelSelect").value = active.model;
+    const ref = active.provider_name && active.model ? `${active.provider_name}/${active.model}` : "";
+    if (ref && [...$("modelSelect").options].some((o) => o.value === ref)) {
+      $("modelSelect").value = ref;
+    } else if ($("modelSelect").options.length) {
+      $("modelSelect").selectedIndex = 0;
+    }
   } catch {}
   $("modelsBox").innerHTML = "<h3>已接入模型</h3>" + state.models.map((m) =>
     `<div class="list-item"><b>${m.provider_name}</b> · ${m.model}</div>`
@@ -360,9 +399,12 @@ $("permMenu").onclick = (e) => {
   if (btn) applyPerm(btn.dataset.mode);
 };
 $("modelSelect").onchange = async () => {
-  const model = $("modelSelect").value;
-  const row = state.models.find((m) => m.model === model);
-  if (row) await api("/api/providers/active-model", { method: "PUT", body: JSON.stringify({ provider_name: row.provider_name, model }) });
+  const ref = $("modelSelect").value;
+  const slash = ref.indexOf("/");
+  if (slash < 0) return;
+  const provider_name = ref.slice(0, slash);
+  const model = ref.slice(slash + 1);
+  await api("/api/providers/active-model", { method: "PUT", body: JSON.stringify({ provider_name, model }) });
 };
 $("btnFetchModels").onclick = () => fetchRemoteModels().catch((err) => { $("providerMsg").textContent = String(err.message || err); });
 $("btnSaveProvider").onclick = () => saveProvider().catch((err) => { $("providerMsg").textContent = String(err.message || err); });
