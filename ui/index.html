@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AusCode</title>
-  <link rel="stylesheet" href="/ui-assets/styles.css?v=13" />
+  <link rel="stylesheet" href="/ui-assets/styles.css?v=14" />
 </head>
 <body>
   <div class="app">
@@ -86,22 +86,6 @@
       <section class="page" id="page-security"><div class="card panel" id="securityBox"></div></section>
       <section class="page" id="page-settings">
         <div class="card settings">
-          <h3>接入 API Key</h3>
-          <p style="color:var(--muted);margin:0">参考 LLM-API-Tester：填名称、兼容接口地址和 Key，然后拉模型并测通。密钥只发给本机 AusCode，不会写进源码。</p>
-          <div class="form-grid">
-            <input id="pName" placeholder="名称，例如 Piko Backup" />
-            <input id="pUrl" placeholder="Base URL，例如 https://example.com/v1" />
-            <input id="pKey" type="password" placeholder="API Key" />
-            <select id="pKind">
-              <option value="openai">OpenAI Compatible</option>
-            </select>
-          </div>
-          <div class="row">
-            <button class="ghost" id="btnFetchModels">拉取模型</button>
-            <button class="primary" id="btnSaveProvider">保存并测通</button>
-          </div>
-          <div id="providerMsg" style="color:var(--muted)"></div>
-          <div id="fetchedModels"></div>
           <h3>工作区</h3>
           <p style="color:var(--muted);margin:0">助手读写文件的根目录。Windows 不能设成整台电脑（跨盘符不安全），可以设成用户主目录，相当于常用文件都够得到。</p>
           <div id="wsCurrent" style="color:var(--muted)"></div>
@@ -119,6 +103,6 @@
       </section>
     </main>
   </div>
-  <script src="/ui-assets/app.js?v=13"></script>
+  <script src="/ui-assets/app.js?v=14"></script>
 </body>
 </html>

@@ -615,44 +615,84 @@ async function loadMemory() {
 
 async function loadModelPage() {
   await loadModels();
-  const providers = await api("/api/providers");
+  const [providers, active, agents] = await Promise.all([
+    api("/api/providers"),
+    api("/api/providers/active-model").catch(() => ({})),
+    api("/api/agents"),
+  ]);
+  const defaultRef = (agents[0] && agents[0].default_model) || (active.provider_name && active.model ? `${active.provider_name}/${active.model}` : "");
   $("modelsBox").innerHTML = `
     <h3>模型</h3>
-    <p style="color:var(--muted);margin:0">每个供应商一张卡片。新增 Key 请到「设置」。</p>
+    <p class="muted">在这里新增、修改、删除供应商，并指定默认模型。密钥只发给本机 AusCode。</p>
+    <div class="form-grid">
+      <input id="pName" placeholder="名称，例如 Piko Backup" />
+      <input id="pUrl" placeholder="Base URL，例如 https://example.com/v1" />
+      <input id="pKey" type="password" placeholder="API Key（修改时不填则保留原 Key）" />
+      <select id="pKind"><option value="openai">OpenAI Compatible</option></select>
+    </div>
+    <div class="row">
+      <button class="ghost" id="btnFetchModels">拉取模型</button>
+      <button class="primary" id="btnSaveProvider">保存并测通</button>
+      <button class="ghost hidden" id="btnCancelEdit">取消修改</button>
+    </div>
+    <div id="fetchedModels"></div>
+    <div id="providerMsg" class="muted"></div>
     <div class="model-grid">
-    ${(providers || []).map((p, i) => `
-      <div class="model-card" style="border-color:${MODEL_COLORS[i % MODEL_COLORS.length]}">
-        <b>${p.name}</b>
+    ${(providers || []).map((p, i) => {
+      const mid = (p.models && p.models[0] && (p.models[0].id || p.models[0].name)) || "";
+      const ref = mid ? `${p.name}/${mid}` : "";
+      const isDefault = defaultRef === ref || defaultRef.startsWith(p.name + "/");
+      return `<div class="model-card" style="border-color:${MODEL_COLORS[i % MODEL_COLORS.length]}">
+        <b>${p.name}</b> ${isDefault ? "<em>默认</em>" : ""}
         <div class="muted">${p.kind} · ${p.enabled ? "启用" : "停用"}</div>
         <div class="muted">${p.base_url || ""}</div>
         <div class="chips">${(p.models || []).map((m) => `<em>${m.id || m.name}</em>`).join("") || "<em>还没拉模型</em>"}</div>
         <div class="row">
-          <button class="ghost" data-toggle="${p.id}">${p.enabled ? "停用" : "启用"}</button>
-          <button class="ghost" data-test="${p.id}" data-mid="${(p.models && p.models[0] && p.models[0].id) || ""}">测通</button>
+          <button class="ghost" data-default="${p.id}" data-name="${p.name}" data-mid="${mid}">设为默认</button>
+          <button class="ghost" data-edit="${p.id}">修改</button>
+          <button class="ghost" data-del="${p.id}" data-name="${p.name}">删除</button>
         </div>
-      </div>`).join("")}
+      </div>`;
+    }).join("")}
     </div>
     <div id="modelMsg" class="muted"></div>
   `;
+  $("btnFetchModels").onclick = () => fetchRemoteModels().catch((err) => { $("providerMsg").textContent = String(err.message || err); });
+  $("btnSaveProvider").onclick = () => saveProvider().catch((err) => { $("providerMsg").textContent = String(err.message || err); });
+  $("btnCancelEdit").onclick = () => { state.editingProviderId = null; loadModelPage(); };
+  if (state.editingProviderId) {
+    const row = (providers || []).find((p) => String(p.id) === String(state.editingProviderId));
+    if (row) {
+      $("pName").value = row.name;
+      $("pName").readOnly = true;
+      $("pUrl").value = row.base_url || "";
+      $("btnSaveProvider").textContent = "保存修改";
+      $("btnCancelEdit").classList.remove("hidden");
+    }
+  }
   $("modelsBox").onclick = async (e) => {
-    const toggle = e.target.dataset.toggle;
-    const test = e.target.dataset.test;
+    const btn = e.target.closest("button");
+    if (!btn) return;
     try {
-      if (toggle) {
-        const row = (providers || []).find((p) => String(p.id) === String(toggle));
-        await api(`/api/admin/providers/${toggle}`, {
-          method: "PATCH",
-          body: JSON.stringify({ enabled: !row.enabled }),
-        });
+      if (btn.dataset.default) {
+        const name = btn.dataset.name;
+        const mid = btn.dataset.mid;
+        if (!mid) { $("modelMsg").textContent = "这个供应商还没有模型"; return; }
+        await api("/api/providers/active-model", { method: "PUT", body: JSON.stringify({ provider_name: name, model: mid }) });
+        await api(`/api/agents/${state.agentId}`, { method: "PATCH", body: JSON.stringify({ default_model: `${name}/${mid}` }) });
+        await loadModels();
         loadModelPage();
       }
-      if (test) {
-        const mid = e.target.dataset.mid;
-        const r = await api(`/api/admin/providers/${test}/test`, {
-          method: "POST",
-          body: JSON.stringify({ model_id: mid }),
-        });
-        $("modelMsg").textContent = r.ok ? `测通 ${r.latency_ms} ms` : "测通失败";
+      if (btn.dataset.edit) {
+        state.editingProviderId = btn.dataset.edit;
+        loadModelPage();
+      }
+      if (btn.dataset.del) {
+        if (!confirm(`删除供应商「${btn.dataset.name}」？`)) return;
+        await api(`/api/admin/providers/${btn.dataset.del}`, { method: "DELETE" });
+        if (String(state.editingProviderId) === String(btn.dataset.del)) state.editingProviderId = null;
+        await loadModels();
+        loadModelPage();
       }
     } catch (err) { $("modelMsg").textContent = String(err.message || err); }
   };
@@ -715,7 +755,13 @@ async function loadSecurity() {
 }
 
 async function fetchRemoteModels() {
-  const body = { kind: $("pKind").value, base_url: $("pUrl").value.trim(), api_key: $("pKey").value };
+  let api_key = $("pKey").value;
+  if (!api_key && state.editingProviderId) {
+    const providers = await api("/api/providers");
+    const row = (providers || []).find((p) => String(p.id) === String(state.editingProviderId));
+    api_key = row && row.api_key;
+  }
+  const body = { kind: $("pKind").value, base_url: $("pUrl").value.trim(), api_key };
   $("providerMsg").textContent = "正在拉取模型…";
   const data = await api("/api/admin/providers/fetch-models", { method: "POST", body: JSON.stringify(body) });
   state.selectedModels = (data.models || []).map((m) => m.id);
@@ -729,8 +775,12 @@ async function saveProvider() {
   const name = $("pName").value.trim();
   const base_url = $("pUrl").value.trim();
   const api_key = $("pKey").value;
-  if (!name || !base_url || !api_key) {
-    $("providerMsg").textContent = "名称、地址、Key 都要填";
+  if (!name || !base_url) {
+    $("providerMsg").textContent = "名称和地址都要填";
+    return;
+  }
+  if (!state.editingProviderId && !api_key) {
+    $("providerMsg").textContent = "新建时必须填 API Key";
     return;
   }
   if (!/^https?:\/\//i.test(base_url)) {
@@ -739,22 +789,37 @@ async function saveProvider() {
   }
   const boxes = [...document.querySelectorAll("#fetchedModels input:checked")];
   const models = (boxes.length ? boxes.map((b) => b.dataset.mid) : state.selectedModels).map((id) => ({ id, name: id, enabled: true }));
-  if (!models.length) {
-    $("providerMsg").textContent = "先拉取模型，再保存";
-    return;
-  }
   $("providerMsg").textContent = "保存中…";
-  const created = await api("/api/admin/providers", {
-    method: "POST",
-    body: JSON.stringify({ name, kind: $("pKind").value, base_url, api_key, models }),
-  });
-  const test = await api(`/api/admin/providers/${created.id}/test`, {
-    method: "POST",
-    body: JSON.stringify({ model_id: models[0].id }),
-  });
-  $("providerMsg").textContent = test.ok ? `已保存并测通（${test.latency_ms} ms）` : "已保存，但测通失败";
-  $("pKey").value = "";
+  let pid = state.editingProviderId;
+  if (pid) {
+    const patch = { kind: $("pKind").value, base_url };
+    if (api_key) patch.api_key = api_key;
+    if (models.length) patch.models = models;
+    await api(`/api/admin/providers/${pid}`, { method: "PATCH", body: JSON.stringify(patch) });
+  } else {
+    if (!models.length) {
+      $("providerMsg").textContent = "先拉取模型，再保存";
+      return;
+    }
+    const created = await api("/api/admin/providers", {
+      method: "POST",
+      body: JSON.stringify({ name, kind: $("pKind").value, base_url, api_key, models }),
+    });
+    pid = created.id;
+  }
+  const mid = models[0] && models[0].id;
+  if (mid) {
+    const test = await api(`/api/admin/providers/${pid}/test`, {
+      method: "POST",
+      body: JSON.stringify({ model_id: mid }),
+    });
+    $("providerMsg").textContent = test.ok ? `已保存并测通（${test.latency_ms} ms）` : "已保存，但测通失败";
+  } else {
+    $("providerMsg").textContent = "已保存";
+  }
+  state.editingProviderId = null;
   await loadModels();
+  loadModelPage();
 }
 
 async function loadWorkspaceSettings() {
@@ -830,9 +895,8 @@ $("modelSelect").onchange = async () => {
   const provider_name = ref.slice(0, slash);
   const model = ref.slice(slash + 1);
   await api("/api/providers/active-model", { method: "PUT", body: JSON.stringify({ provider_name, model }) });
+  await api(`/api/agents/${state.agentId}`, { method: "PATCH", body: JSON.stringify({ default_model: ref }) });
 };
-$("btnFetchModels").onclick = () => fetchRemoteModels().catch((err) => { $("providerMsg").textContent = String(err.message || err); });
-$("btnSaveProvider").onclick = () => saveProvider().catch((err) => { $("providerMsg").textContent = String(err.message || err); });
 $("wsHome").onclick = () => applyWorkspace(state.homeDir).catch((err) => { $("wsMsg").textContent = String(err.message || err); });
 $("wsProject").onclick = () => applyWorkspace(state.projectDir).catch((err) => { $("wsMsg").textContent = String(err.message || err); });
 $("wsApply").onclick = () => applyWorkspace($("wsCustom").value).catch((err) => { $("wsMsg").textContent = String(err.message || err); });
