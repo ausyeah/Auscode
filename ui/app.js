@@ -247,9 +247,16 @@ function appendThink(text) {
 function finishThinkStatus() {
   const el = document.querySelector(".think-block.live");
   if (!el) return;
-  const sec = Math.max(0, Math.floor((Date.now() - thinkStartedAt) / 1000));
+  const body = el.querySelector(".think-body");
+  const hasText = Boolean(body && body.textContent.trim());
   el.classList.remove("live");
   el.classList.remove("open");
+  if (!hasText) {
+    el.classList.add("empty");
+    el.remove();
+    return;
+  }
+  const sec = Math.max(1, Math.floor((Date.now() - thinkStartedAt) / 1000));
   const head = el.querySelector(".think-head");
   if (head) head.textContent = `思考 · 持续了 ${secText(sec)}`;
 }
@@ -263,16 +270,29 @@ function toolVerb(name) {
   if (n.includes("browser")) return "浏览";
   return "工具";
 }
+function shortPath(value) {
+  const text = String(value || "").replace(/\\/g, "/");
+  if (!text) return "";
+  const parts = text.split("/").filter(Boolean);
+  if (parts.length <= 2) return text;
+  return `…/${parts.slice(-2).join("/")}`;
+}
+function clipText(text, max) {
+  const value = String(text || "").replace(/\s+/g, " ").trim();
+  if (value.length <= max) return value;
+  return `${value.slice(0, Math.max(0, max - 1)).replace(/[\uD800-\uDBFF]$/, "")}…`;
+}
 function toolSummary(name, args) {
-  if (!args) return name;
-  if (typeof args === "string") return args.slice(0, 80);
+  if (!args) return clipText(name, 48);
+  if (typeof args === "string") {
+    try { args = JSON.parse(args); } catch { return clipText(args, 56); }
+  }
   const cmd = args.command || args.cmd || args.query || "";
   const path = args.path || args.file || args.filename || args.file_path || "";
   const pattern = args.pattern || args.glob || "";
-  return [cmd, path, pattern, name].filter(Boolean).join(" ").slice(0, 90);
+  return clipText([cmd, shortPath(path), pattern].filter(Boolean).join(" ") || name, 56);
 }
 function upsertToolCard(id, name, status, args) {
-  finishThinkStatus();
   startWork();
   const key = String(id || name);
   let el = [...document.querySelectorAll(".tool-line")].find((n) => n.dataset.tool === key);
