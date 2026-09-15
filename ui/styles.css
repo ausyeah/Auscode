@@ -4,12 +4,14 @@
   --ink: #2b241c;
   --muted: #7a6f63;
   --line: #e4d8c8;
-  --accent: #8c4a3a;
-  --accent-soft: #f3e6dc;
-  --ok: #6b7f6a;
+  --accent: #7a8fb0;
+  --accent-soft: #e8eef6;
+  --ok: #8aa58a;
   --ink-soft: #4a433b;
   --water: #d7e7ea;
   --water-ink: #35545a;
+  --rose: #f0d5d5;
+  --lilac: #e4dceb;
   --shadow: 0 10px 30px rgba(43, 36, 28, 0.08);
   --radius: 18px;
   --fang: "FangSong", "仿宋", "STFangsong", "FangSong_GB2312", "KaiTi", serif;
@@ -41,7 +43,7 @@ body {
   border: 0; background: transparent; text-align: left;
   padding: 10px 12px; border-radius: 12px; color: var(--ink); cursor: pointer;
 }
-.nav button.active, .nav button:hover { background: var(--accent-soft); color: var(--ink-soft); }
+.nav button.active, .nav button:hover { background: var(--accent-soft); color: #3d4d66; }
 .usage-card {
   margin-top: 22px; padding: 14px; border-radius: 16px;
   background: var(--paper); box-shadow: var(--shadow);
@@ -189,10 +191,10 @@ button.ghost {
 }
 .stat-card span { font-size: 12px; color: var(--muted); }
 .stat-card b { font-size: 22px; font-weight: 700; letter-spacing: 0.02em; }
-.stat-card.input { background: linear-gradient(180deg, #f7efd8, #f3e6c8); }
-.stat-card.cache { background: linear-gradient(180deg, #e7eee6, #dce7db); }
-.stat-card.output { background: linear-gradient(180deg, #f3e4dc, #ead5cb); }
-.stat-card.think { background: linear-gradient(180deg, #e8e4ef, #ddd7e8); }
+.stat-card.input { background: linear-gradient(180deg, #e7f1f5, #d7e7ea); }
+.stat-card.cache { background: linear-gradient(180deg, #e8eef6, #d9e2f0); }
+.stat-card.output { background: linear-gradient(180deg, #f7eaea, #f0d5d5); }
+.stat-card.think { background: linear-gradient(180deg, #eee8f4, #e4dceb); }
 .hit-wrap { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
 .hit-bar { height: 12px; background: #eee4d6; border-radius: 99px; overflow: hidden; display: flex; }
 .hit-bar .hit { background: #8aa58a; }
@@ -204,16 +206,30 @@ button.ghost {
 .chart-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 28px; }
 .chart-stack { width: 100%; height: 128px; display: flex; flex-direction: column-reverse; border-radius: 8px 8px 4px 4px; overflow: hidden; background: #f3eadc; }
 .chart-stack i { display: block; width: 100%; }
-.chart-stack .in { background: #d6c48a; }
-.chart-stack .ca { background: #8aa58a; }
-.chart-stack .ou { background: #c4a090; }
+.chart-stack .in { background: #9ec4d4; }
+.chart-stack .ca { background: #b7c7e0; }
+.chart-stack .ou { background: #e3b6b6; }
 .chart-col em { font-style: normal; font-size: 11px; color: var(--muted); }
 .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; }
-.legend .in { background: #d6c48a; }
-.legend .ca { background: #8aa58a; }
-.legend .ou { background: #c4a090; }
-.legend .th { background: #b7aec8; }
+.legend .in { background: #9ec4d4; }
+.legend .ca { background: #b7c7e0; }
+.legend .ou { background: #e3b6b6; }
+.legend .th { background: #c4b7d6; }
+.hit-bar .hit { background: #9ec4d4; }
+.hit-bar .miss { background: #e3b6b6; }
+.model-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.model-card {
+  border: 1px solid var(--line); border-radius: 16px; padding: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.8), rgba(232,238,246,0.5));
+  display: flex; flex-direction: column; gap: 8px;
+}
+.model-card .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.model-card em {
+  font-style: normal; background: #eef4f8; border-radius: 999px;
+  padding: 2px 8px; font-size: 12px; color: #35545a;
+}
+.muted { color: var(--muted); }
 .usage-card .big { color: var(--ink-soft); }
 .seg { display: flex; gap: 6px; flex-wrap: wrap; }
 .seg button {

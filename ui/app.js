@@ -23,7 +23,7 @@ const PERM = {
 const $ = (id) => document.getElementById(id);
 const titles = {
   chat: "当前会话", cron: "自动化", usage: "Token 统计", memory: "记忆",
-  models: "模型", plugins: "插件", security: "权限", settings: "设置",
+  models: "模型", skills: "技能", security: "权限", settings: "设置",
 };
 
 async function api(path, opts = {}) {
@@ -265,7 +265,10 @@ function connectWs() {
       stopWork();
       state.streaming = false;
       assistantEl = null;
-      if (frame.thread_id) state.threadId = frame.thread_id;
+      if (frame.thread_id) {
+        state.threadId = frame.thread_id;
+        localStorage.setItem("auscode.thread", frame.thread_id);
+      }
       refreshContext();
       refreshUsage();
     }
@@ -355,6 +358,7 @@ async function loadThreads() {
 
 async function openThread(id) {
   state.threadId = id;
+  localStorage.setItem("auscode.thread", id);
   const hist = await api(`/api/agents/${state.agentId}/threads/${id}/history`);
   $("messages").innerHTML = "";
   const msgs = hist.messages || hist.items || [];
@@ -401,7 +405,7 @@ async function refreshContext() {
 }
 
 state.usageWindow = state.usageWindow || "last_7d";
-const MODEL_COLORS = ["#8eabc0", "#8aa58a", "#b7aec8", "#c4a090", "#d6c48a", "#9bb8b0", "#c9b6a4"];
+const MODEL_COLORS = ["#9ec4d4", "#e3b6b6", "#c4b7d6", "#b7cfc4", "#e6c9b2", "#b9c7e0", "#d9b8c8"];
 
 async function refreshUsage() {
   const [u5, today] = await Promise.all([
@@ -470,13 +474,13 @@ async function refreshUsage() {
       <div class="heat">${heat || "<p>还没有用量</p>"}</div>
     </div>
     <div class="hit-wrap">
-      <div class="kv" style="border:0;padding-top:0"><span>每日趋势</span><b>${fmt(u.total_tokens)}</b></div>
-      <div class="legend">
-        <span><i class="ca"></i>缓存</span>
-        <span><i class="in"></i>输入</span>
-        <span><i class="ou"></i>输出</span>
+      <div class="kv" style="border:0;padding-top:0"><span>缓存 / 输入 / 输出</span><b>命中 ${hit}%</b></div>
+      <div class="hit-bar"><span class="hit" style="width:${hit}%"></span><span class="miss" style="width:${Math.max(0, 100 - hit)}%"></span></div>
+      <div class="legend" style="margin-top:10px">
+        <span><i class="ca"></i>缓存读取 ${fmt(u.cache_read_tokens)}</span>
+        <span><i class="in"></i>未缓存输入 ${fmt(u.uncached_input_tokens)}</span>
+        <span><i class="ou"></i>输出 ${fmt(u.output_tokens)}</span>
       </div>
-      <div class="chart">${dayCols || "<p>还没有用量</p>"}</div>
     </div>
     <div class="hit-wrap">
       <div class="kv" style="border:0;padding-top:0"><span>模型用量</span><b></b></div>
@@ -539,7 +543,7 @@ function showPage(name) {
   }
   const loaders = {
     cron: loadCron, usage: refreshUsage, memory: loadMemory,
-    models: loadModelPage, plugins: loadPlugins, security: loadSecurity,
+    models: loadModelPage, skills: loadSkills, security: loadSecurity,
     settings: loadWorkspaceSettings,
   };
   if (loaders[name]) loaders[name]();
@@ -614,16 +618,21 @@ async function loadModelPage() {
   const providers = await api("/api/providers");
   $("modelsBox").innerHTML = `
     <h3>模型</h3>
-    <p style="color:var(--muted);margin:0">这里管理已接入的供应商。新增 Key 请到「设置」。</p>
-    ${(providers || []).map((p) => `
-      <div class="list-item">
-        <b>${p.name}</b> · ${p.kind} · ${p.enabled ? "启用" : "停用"}
-        <div style="color:var(--muted)">${p.base_url || ""}</div>
-        <div>${(p.models || []).map((m) => m.id || m.name).join("、") || "还没拉模型"}</div>
-        <button class="ghost" data-toggle="${p.id}">${p.enabled ? "停用" : "启用"}</button>
-        <button class="ghost" data-test="${p.id}" data-mid="${(p.models && p.models[0] && p.models[0].id) || ""}">测通</button>
+    <p style="color:var(--muted);margin:0">每个供应商一张卡片。新增 Key 请到「设置」。</p>
+    <div class="model-grid">
+    ${(providers || []).map((p, i) => `
+      <div class="model-card" style="border-color:${MODEL_COLORS[i % MODEL_COLORS.length]}">
+        <b>${p.name}</b>
+        <div class="muted">${p.kind} · ${p.enabled ? "启用" : "停用"}</div>
+        <div class="muted">${p.base_url || ""}</div>
+        <div class="chips">${(p.models || []).map((m) => `<em>${m.id || m.name}</em>`).join("") || "<em>还没拉模型</em>"}</div>
+        <div class="row">
+          <button class="ghost" data-toggle="${p.id}">${p.enabled ? "停用" : "启用"}</button>
+          <button class="ghost" data-test="${p.id}" data-mid="${(p.models && p.models[0] && p.models[0].id) || ""}">测通</button>
+        </div>
       </div>`).join("")}
-    <div id="modelMsg" style="color:var(--muted)"></div>
+    </div>
+    <div id="modelMsg" class="muted"></div>
   `;
   $("modelsBox").onclick = async (e) => {
     const toggle = e.target.dataset.toggle;
@@ -649,23 +658,47 @@ async function loadModelPage() {
   };
 }
 
-async function loadPlugins() {
-  const rows = await api("/api/plugins");
-  $("pluginsBox").innerHTML = "<h3>插件</h3>" + (rows || []).map((p) =>
-    `<div class="list-item">
-      <b>${p.name || p.id}</b>
-      <div style="color:var(--muted)">${p.description || ""}</div>
-      <button class="ghost" data-plugin="${p.id}" data-on="${p.enabled ? "0" : "1"}">${p.enabled ? "停用" : "启用"}</button>
-    </div>`
-  ).join("") || "<p>没有插件</p>";
-  $("pluginsBox").onclick = async (e) => {
-    const id = e.target.dataset.plugin;
-    if (!id) return;
-    await api(`/api/plugins/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ enabled: e.target.dataset.on === "1" }),
-    });
-    loadPlugins();
+async function loadSkills() {
+  const [remote, local] = await Promise.all([
+    api(`/api/agents/${state.agentId}/skills`),
+    api("/api/ui/local-skills").catch(() => ({ items: [] })),
+  ]);
+  const rows = remote.items || remote || [];
+  const locals = local.items || [];
+  $("skillsBox").innerHTML = `
+    <h3>技能</h3>
+    <p class="muted">本机扫描 C:\\Users\\…\\.agents\\skills。点导入后，对话里就能用这些 SKILL.md。</p>
+    <div class="row"><button class="primary" id="skillScan">重新扫描并导入本地技能</button></div>
+    <div id="skillMsg" class="muted"></div>
+    <h4>已加载</h4>
+    ${rows.map((s) => `
+      <div class="list-item">
+        <b>${s.label?.zh || s.name || s.slug}</b>
+        <div class="muted">${s.description || s.summary?.zh || ""}</div>
+        <button class="ghost" data-skill="${s.name || s.slug}" data-on="${s.enabled ? "0" : "1"}">${s.enabled ? "停用" : "启用"}</button>
+      </div>`).join("") || "<p>还没有技能</p>"}
+    <h4>本机待导入</h4>
+    ${locals.map((s) => `<div class="list-item"><b>${s.name}</b><div class="muted">${s.path}</div></div>`).join("") || "<p>没找到本地 .agents/skills</p>"}
+  `;
+  $("skillScan").onclick = async () => {
+    $("skillMsg").textContent = "导入中…";
+    try {
+      for (const s of locals) {
+        await api("/api/ui/local-skills/import", {
+          method: "POST",
+          body: JSON.stringify({ name: s.name, agent_id: state.agentId }),
+        });
+      }
+      $("skillMsg").textContent = `已导入 ${locals.length} 个`;
+      loadSkills();
+    } catch (err) { $("skillMsg").textContent = String(err.message || err); }
+  };
+  $("skillsBox").onclick = async (e) => {
+    const name = e.target.dataset.skill;
+    if (!name) return;
+    const on = e.target.dataset.on === "1";
+    await api(`/api/agents/${state.agentId}/skills/${encodeURIComponent(name)}/${on ? "enable" : "disable"}`, { method: "POST" });
+    loadSkills();
   };
 }
 async function loadSecurity() {
@@ -768,6 +801,10 @@ async function boot() {
   state.projectDir = sess.project_dir || "D:/AusCode";
   setPermLabel();
   await Promise.all([loadModels(), loadThreads(), refreshUsage()]);
+  const saved = localStorage.getItem("auscode.thread");
+  if (saved && (await api(`/api/agents/${state.agentId}/threads`)).some((t) => t.thread_id === saved)) {
+    await openThread(saved);
+  }
   connectWs();
 }
 
