@@ -86,25 +86,24 @@ body {
 .bubble { max-width: 78%; padding: 12px 14px; border-radius: 16px; white-space: pre-wrap; line-height: 1.55; }
 .bubble.user { margin-left: auto; background: var(--accent); color: #fff; }
 .bubble.assistant { background: #fff; border: 1px solid var(--line); }
-.bubble.think {
-  background: transparent; border: 0; padding: 4px 2px;
-  color: var(--muted); font-size: 13px; max-width: 100%;
+.work-status { color: var(--muted); font-size: 13px; padding: 2px 2px 8px; }
+.think-block { max-width: 86%; color: var(--muted); font-size: 13px; }
+.think-head {
+  border: 0; background: transparent; color: var(--muted); cursor: pointer;
+  padding: 0; font-family: var(--fang); font-size: 13px; text-align: left;
 }
-.think-dot {
-  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
-  background: var(--accent); margin-right: 8px; animation: pulse 1s ease-in-out infinite;
+.think-body {
+  display: none; margin: 6px 0 8px; padding: 10px 12px; border-radius: 12px;
+  background: #f7f1e6; color: var(--muted); font-size: 12px; line-height: 1.5;
+  white-space: pre-wrap;
 }
-@keyframes pulse { 50% { opacity: 0.25; } }
-.tool-card {
-  max-width: 78%; padding: 10px 12px; border-radius: 12px;
-  border: 1px dashed var(--line); background: #f7f1e6; color: var(--ink); font-size: 13px;
+.think-block.open .think-body, .think-block.live .think-body { display: block; }
+.think-block.live .think-head { color: var(--accent); }
+.tool-line {
+  max-width: 86%; color: var(--muted); font-size: 13px; padding: 2px 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.tool-card b { font-weight: 700; }
-.tool-card .tool-status { color: var(--muted); margin-left: 8px; }
-.tool-card pre {
-  margin: 8px 0 0; white-space: pre-wrap; color: var(--muted);
-  font-family: var(--fang); font-size: 12px; max-height: 120px; overflow: auto;
-}
+.tool-line b { font-weight: 700; color: #6b6258; }
 .settings h3, .panel h3, .usage-card h4, .panel h4 { font-weight: 700; }
 .composer { padding: 12px; border-top: 1px solid var(--line); }
 .toolbar { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }

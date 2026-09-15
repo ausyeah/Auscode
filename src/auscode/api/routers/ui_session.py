@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from auscode.infra.utils.host_dirs import host_home_dir, host_path_text
 from auscode.infra.utils.paths import PathLayout
 
 router = APIRouter()
@@ -29,4 +30,10 @@ async def ui_session() -> JSONResponse:
             {"ok": False, "error": "credential.txt 中没有 Token，请先运行 bootstrap_token.py"},
             status_code=503,
         )
-    return JSONResponse({"ok": True, "token": token, "agent_id": "TV3AHW"})
+    return JSONResponse({
+        "ok": True,
+        "token": token,
+        "agent_id": "TV3AHW",
+        "home_dir": host_path_text(host_home_dir()),
+        "project_dir": "D:/AusCode",
+    })

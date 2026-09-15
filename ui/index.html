@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AusCode</title>
-  <link rel="stylesheet" href="/ui-assets/styles.css?v=6" />
+  <link rel="stylesheet" href="/ui-assets/styles.css?v=8" />
 </head>
 <body>
   <div class="app">
@@ -102,10 +102,23 @@
           </div>
           <div id="providerMsg" style="color:var(--muted)"></div>
           <div id="fetchedModels"></div>
+          <h3>工作区</h3>
+          <p style="color:var(--muted);margin:0">助手读写文件的根目录。Windows 不能设成整台电脑（跨盘符不安全），可以设成用户主目录，相当于常用文件都够得到。</p>
+          <div id="wsCurrent" style="color:var(--muted)"></div>
+          <div class="row">
+            <button class="ghost" id="wsHome">改到用户主目录</button>
+            <button class="ghost" id="wsProject">改回 D:\AusCode</button>
+          </div>
+          <div class="row">
+            <input id="wsCustom" placeholder="自定义路径，例如 D:\Notes" />
+            <button class="primary" id="wsApply">应用</button>
+          </div>
+          <label style="color:var(--muted)"><input type="checkbox" id="wsVirtual" /> 虚拟路径（助手眼里仍是 /.auscode/...，一般保持关掉）</label>
+          <div id="wsMsg" style="color:var(--muted)"></div>
         </div>
       </section>
     </main>
   </div>
-  <script src="/ui-assets/app.js?v=6"></script>
+  <script src="/ui-assets/app.js?v=8"></script>
 </body>
 </html>

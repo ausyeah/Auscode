@@ -1,6 +1,8 @@
 const state = {
   token: "",
   agentId: "TV3AHW",
+  homeDir: "",
+  projectDir: "D:/AusCode",
   threadId: "",
   models: [],
   ws: null,
@@ -84,75 +86,128 @@ function addBubble(role, text) {
 
 let thinkTimer = null;
 let thinkStartedAt = 0;
-function formatThink(sec, done) {
-  const prefix = done ? "已思考" : "思考中";
-  if (sec < 60) return `${prefix} ${sec}s`;
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${prefix} ${m}分${String(s).padStart(2, "0")}秒`;
+let workStartedAt = 0;
+function secText(sec) {
+  if (sec < 60) return `${sec}秒`;
+  return `${Math.floor(sec / 60)}分${sec % 60}秒`;
 }
-function tickThink() {
-  const el = document.querySelector(".bubble.think.live");
-  if (!el) return;
-  const label = el.querySelector(".think-label");
-  if (label) label.textContent = formatThink(Math.max(0, Math.floor((Date.now() - thinkStartedAt) / 1000)), false);
-}
-function startThinkStatus() {
-  let el = document.querySelector(".bubble.think.live");
+function workEl() {
+  let el = document.querySelector(".work-status.live");
   if (!el) {
     el = document.createElement("div");
-    el.className = "bubble think live";
-    el.innerHTML = `<span class="think-dot"></span><span class="think-label">${formatThink(0, false)}</span>`;
+    el.className = "work-status live";
+    $("messages").appendChild(el);
+    workStartedAt = Date.now();
+  }
+  return el;
+}
+function tickTimers() {
+  const work = document.querySelector(".work-status.live");
+  if (work) work.textContent = `工作中 ${secText(Math.floor((Date.now() - workStartedAt) / 1000))}`;
+  const think = document.querySelector(".think-block.live");
+  if (think) {
+    const head = think.querySelector(".think-head");
+    const sec = Math.floor((Date.now() - thinkStartedAt) / 1000);
+    if (head) head.textContent = `思考 · ${secText(sec)}`;
+  }
+}
+function ensureTimer() {
+  if (!thinkTimer) thinkTimer = setInterval(tickTimers, 250);
+}
+function startWork() {
+  workEl();
+  ensureTimer();
+  tickTimers();
+}
+function stopWork() {
+  const el = document.querySelector(".work-status.live");
+  if (el) {
+    el.classList.remove("live");
+    el.textContent = `工作了 ${secText(Math.floor((Date.now() - workStartedAt) / 1000))}`;
+  }
+  if (thinkTimer && !document.querySelector(".think-block.live")) {
+    clearInterval(thinkTimer);
+    thinkTimer = null;
+  }
+}
+function startThinkStatus() {
+  startWork();
+  let el = document.querySelector(".think-block.live");
+  if (!el) {
+    el = document.createElement("div");
+    el.className = "think-block live open";
+    el.innerHTML = `<button class="think-head" type="button">思考 · 0秒</button><div class="think-body"></div>`;
+    el.querySelector(".think-head").onclick = () => el.classList.toggle("open");
     $("messages").appendChild(el);
     thinkStartedAt = Date.now();
   }
-  if (!thinkTimer) thinkTimer = setInterval(tickThink, 250);
-  tickThink();
+  ensureTimer();
+  tickTimers();
   $("messages").scrollTop = $("messages").scrollHeight;
   return el;
 }
+function appendThink(text) {
+  const el = startThinkStatus();
+  const body = el.querySelector(".think-body");
+  if (body && text) body.textContent += text;
+}
 function finishThinkStatus() {
-  const el = document.querySelector(".bubble.think.live");
-  if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null; }
+  const el = document.querySelector(".think-block.live");
   if (!el) return;
   const sec = Math.max(0, Math.floor((Date.now() - thinkStartedAt) / 1000));
   el.classList.remove("live");
-  el.innerHTML = formatThink(sec, true);
+  el.classList.remove("open");
+  const head = el.querySelector(".think-head");
+  if (head) head.textContent = `思考 · 持续了 ${secText(sec)}`;
 }
 
-function toolNameFrom(frame) {
-  return frame.name || frame.tool || frame.tool_name || (frame.data && (frame.data.name || frame.data.tool)) || "工具";
+function toolVerb(name) {
+  const n = String(name || "").toLowerCase();
+  if (n.includes("bash") || n.includes("exec") || n.includes("shell") || n.includes("terminal")) return "终端";
+  if (n.includes("edit") || n.includes("write")) return "编辑";
+  if (n.includes("read") || n.includes("cat")) return "读取";
+  if (n.includes("glob") || n.includes("grep") || n.includes("search") || n.includes("ls")) return "查阅";
+  if (n.includes("browser")) return "浏览";
+  return "工具";
 }
-function upsertToolCard(id, name, status, detail) {
+function toolSummary(name, args) {
+  if (!args) return name;
+  if (typeof args === "string") return args.slice(0, 80);
+  const cmd = args.command || args.cmd || args.query || "";
+  const path = args.path || args.file || args.filename || args.file_path || "";
+  const pattern = args.pattern || args.glob || "";
+  return [cmd, path, pattern, name].filter(Boolean).join(" ").slice(0, 90);
+}
+function upsertToolCard(id, name, status, args) {
+  finishThinkStatus();
+  startWork();
   const key = String(id || name);
-  let el = [...document.querySelectorAll(".tool-card")].find((n) => n.dataset.tool === key);
+  let el = [...document.querySelectorAll(".tool-line")].find((n) => n.dataset.tool === key);
   if (!el) {
     el = document.createElement("div");
-    el.className = "tool-card";
+    el.className = "tool-line";
     el.dataset.tool = key;
     $("messages").appendChild(el);
   }
-  el.innerHTML = `<b>${name}</b><span class="tool-status">${status}</span>${detail ? `<pre>${detail}</pre>` : ""}`;
+  const extra = status === "等待确认" ? " · 待确认" : "";
+  el.innerHTML = `<b>${toolVerb(name)}</b> ${toolSummary(name, args)}${extra}`;
   $("messages").scrollTop = $("messages").scrollHeight;
 }
 function handleToolFrame(frame) {
   const t = frame.type || "";
-  const name = toolNameFrom(frame);
+  const name = frame.name || frame.tool || frame.tool_name || (frame.data && (frame.data.name || frame.data.tool)) || "工具";
   const id = frame.id || frame.tool_call_id || (frame.data && frame.data.id) || name;
+  const args = frame.args || frame.input || (frame.data && (frame.data.args || frame.data.input));
   if (t === "tool_start" || t === "tool_call" || t === "tool_use") {
-    const args = frame.args || frame.input || (frame.data && (frame.data.args || frame.data.input));
-    const detail = args ? JSON.stringify(args, null, 0).slice(0, 240) : "";
-    upsertToolCard(id, name, "调用中", detail);
+    upsertToolCard(id, name, "调用中", args);
     return true;
   }
   if (t === "tool_result" || t === "tool_end" || t === "tool") {
-    const out = frame.output || frame.result || frame.content || (frame.data && (frame.data.output || frame.data.content));
-    const text = typeof out === "string" ? out : extractText(out);
-    upsertToolCard(id, name, "完成", (text || "").slice(0, 400));
+    upsertToolCard(id, name, "完成", args || frame.output || frame.result);
     return true;
   }
   if (t === "hitl_required") {
-    upsertToolCard(id, name, "等待确认", "需要你批准后才能继续");
+    upsertToolCard(id, name, "等待确认", args);
     return true;
   }
   return false;
@@ -183,7 +238,7 @@ function connectWs() {
     const t = frame.type;
     if (handleToolFrame(frame)) return;
     if (t === "reasoning") {
-      startThinkStatus();
+      appendThink(frame.content || frame.text || "");
       return;
     }
     if (t === "token" || t === "text" || t === "delta") {
@@ -207,6 +262,7 @@ function connectWs() {
     }
     if (t === "done" || t === "turn_end") {
       finishThinkStatus();
+      stopWork();
       state.streaming = false;
       assistantEl = null;
       if (frame.thread_id) state.threadId = frame.thread_id;
@@ -305,8 +361,13 @@ async function openThread(id) {
   msgs.forEach((m) => {
     const role = m.role || m.type;
     const content = extractText(m.content);
-    if (!content) return;
     const blocks = Array.isArray(m.content) ? m.content : [];
+    const thinking = blocks.filter((b) => b && b.type === "thinking").map((b) => b.thinking || b.text || "").join("");
+    if (thinking) {
+      const el = startThinkStatus();
+      el.querySelector(".think-body").textContent = thinking;
+      finishThinkStatus();
+    }
     blocks.forEach((b) => {
       if (!b || typeof b !== "object") return;
       if (b.type === "tool_use") handleToolFrame({ type: "tool_use", name: b.name, id: b.id, args: b.input });
@@ -316,6 +377,7 @@ async function openThread(id) {
       handleToolFrame({ type: "tool_result", name: m.name, id: m.tool_call_id || m.id, output: m.content });
       return;
     }
+    if (!content) return;
     if (role === "user" || role === "human") addBubble("user", content);
     else if (role === "assistant" || role === "ai") addBubble("assistant", content);
   });
@@ -401,6 +463,7 @@ function showPage(name) {
   const loaders = {
     cron: loadCron, usage: refreshUsage, memory: loadMemory,
     models: loadModelPage, plugins: loadPlugins, security: loadSecurity,
+    settings: loadWorkspaceSettings,
   };
   if (loaders[name]) loaders[name]();
 }
@@ -584,6 +647,33 @@ async function saveProvider() {
   await loadModels();
 }
 
+async function loadWorkspaceSettings() {
+  const agents = await api("/api/agents");
+  const a = (agents || [])[0] || {};
+  const root = (a.config && a.config.backend && a.config.backend.root_dir) || "";
+  const virtual = !!(a.config && a.config.backend && a.config.backend.virtual_mode);
+  $("wsCurrent").textContent = `当前：${root || "未设置"}`;
+  $("wsCustom").value = root;
+  $("wsVirtual").checked = virtual;
+}
+async function applyWorkspace(root) {
+  const path = (root || $("wsCustom").value || "").trim();
+  if (!path) { $("wsMsg").textContent = "请填写路径"; return; }
+  $("wsMsg").textContent = "保存中…";
+  const agents = await api("/api/agents");
+  const a = (agents || [])[0];
+  const cfg = { ...(a.config || {}) };
+  cfg.backend = {
+    ...(cfg.backend || {}),
+    type: "local_shell",
+    root_dir: path.replace(/\\/g, "/"),
+    virtual_mode: $("wsVirtual").checked,
+  };
+  await api(`/api/agents/${a.agent_id}`, { method: "PATCH", body: JSON.stringify({ config: cfg }) });
+  $("wsMsg").textContent = "已保存。新对话会按这个根目录读写文件。";
+  loadWorkspaceSettings();
+}
+
 async function newThread() {
   const t = await api(`/api/agents/${state.agentId}/threads`, { method: "POST" });
   state.threadId = t.thread_id;
@@ -597,6 +687,8 @@ async function boot() {
   if (!sess.ok) throw new Error(sess.error || "无法读取本机 Token");
   state.token = sess.token;
   state.agentId = sess.agent_id || state.agentId;
+  state.homeDir = sess.home_dir || "";
+  state.projectDir = sess.project_dir || "D:/AusCode";
   setPermLabel();
   await Promise.all([loadModels(), loadThreads(), refreshUsage()]);
   connectWs();
@@ -627,5 +719,8 @@ $("modelSelect").onchange = async () => {
 };
 $("btnFetchModels").onclick = () => fetchRemoteModels().catch((err) => { $("providerMsg").textContent = String(err.message || err); });
 $("btnSaveProvider").onclick = () => saveProvider().catch((err) => { $("providerMsg").textContent = String(err.message || err); });
+$("wsHome").onclick = () => applyWorkspace(state.homeDir).catch((err) => { $("wsMsg").textContent = String(err.message || err); });
+$("wsProject").onclick = () => applyWorkspace(state.projectDir).catch((err) => { $("wsMsg").textContent = String(err.message || err); });
+$("wsApply").onclick = () => applyWorkspace($("wsCustom").value).catch((err) => { $("wsMsg").textContent = String(err.message || err); });
 
 boot().catch((err) => addBubble("think", "启动失败：" + err.message));
