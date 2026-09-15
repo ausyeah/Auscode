@@ -519,6 +519,28 @@ async function refreshContext() {
 
 state.usageWindow = state.usageWindow || "last_7d";
 const MODEL_COLORS = ["#9ec4d4", "#e3b6b6", "#c4b7d6", "#b7cfc4", "#e6c9b2", "#b9c7e0", "#d9b8c8"];
+const PRICE_DEFAULTS = { input: 2, output: 8, cache_read: 0.2, cache_write: 2 };
+function loadPrices() {
+  try { return { ...PRICE_DEFAULTS, ...JSON.parse(localStorage.getItem("auscode.prices") || "{}") }; }
+  catch { return { ...PRICE_DEFAULTS }; }
+}
+function savePrices(prices) {
+  localStorage.setItem("auscode.prices", JSON.stringify(prices));
+}
+function money(n) {
+  const v = Number(n || 0);
+  if (v === 0) return "¥0.00";
+  if (v < 0.01) return `¥${v.toFixed(4)}`;
+  return `¥${v.toFixed(2)}`;
+}
+function calcCost(u, prices) {
+  const perM = (tokens, rate) => Number(tokens || 0) / 1e6 * Number(rate || 0);
+  const input = perM(u.uncached_input_tokens ?? u.input_tokens, prices.input);
+  const output = perM(u.output_tokens, prices.output);
+  const cacheRead = perM(u.cache_read_tokens, prices.cache_read);
+  const cacheWrite = perM(u.cache_write_tokens, prices.cache_write);
+  return { input, output, cacheRead, cacheWrite, total: input + output + cacheRead + cacheWrite };
+}
 
 async function refreshUsage() {
   const [u5, today] = await Promise.all([
@@ -526,8 +548,8 @@ async function refreshUsage() {
     api("/api/usage/summary?window=today&granularity=total"),
   ]);
   $("usage5h").textContent = fmt(u5.total_tokens);
-  $("usageToday").textContent = `今日 ${fmt(today.total_tokens)}`;
-  $("usageHit").textContent = `今日命中 ${today.cache_hit_percent ?? 0}%`;
+  $("usageIo").textContent = `入 ${fmt(u5.input_tokens)} / 出 ${fmt(u5.output_tokens)}`;
+  $("usageToday").textContent = `今日 入 ${fmt(today.input_tokens)} / 出 ${fmt(today.output_tokens)}`;
   if (!$("usageBox")) return;
   const win = state.usageWindow;
   const [day, models] = await Promise.all([
@@ -570,12 +592,28 @@ async function refreshUsage() {
       <em>${String(b.label || "").slice(5)}</em>
     </div>`;
   }).join("");
+  const prices = loadPrices();
+  const cost = calcCost(u, prices);
   const winBtns = [["today","今日"],["last_7d","近 7 日"],["last_30d","近 30 日"],["all","累计"]].map(([id, label]) =>
     `<button data-win="${id}" class="${id === win ? "on" : ""}">${label}</button>`
   ).join("");
   $("usageBox").innerHTML = `
     <h3>使用统计</h3>
     <div class="seg">${winBtns}</div>
+    <div class="hit-wrap">
+      <div class="kv" style="border:0;padding-top:0"><span>花费估算</span><b class="cost-total">${money(cost.total)}</b></div>
+      <p class="muted">单价按每百万 token（¥ / 1M）自己填，只存在本机浏览器。</p>
+      <div class="price-grid">
+        <label>输入（未缓存）<input id="priceInput" type="number" min="0" step="0.01" value="${prices.input}"></label>
+        <label>输出<input id="priceOutput" type="number" min="0" step="0.01" value="${prices.output}"></label>
+        <label>缓存命中输入<input id="priceCacheRead" type="number" min="0" step="0.01" value="${prices.cache_read}"></label>
+        <label>缓存写入<input id="priceCacheWrite" type="number" min="0" step="0.01" value="${prices.cache_write}"></label>
+      </div>
+      <div class="kv"><span>输入花费</span><b>${money(cost.input)}</b></div>
+      <div class="kv"><span>输出花费</span><b>${money(cost.output)}</b></div>
+      <div class="kv"><span>缓存命中花费</span><b>${money(cost.cacheRead)}</b></div>
+      <div class="kv"><span>缓存写入花费</span><b>${money(cost.cacheWrite)}</b></div>
+    </div>
     <div class="stat-grid">
       <div class="stat-card input"><span>累计 Token</span><b>${fmt(u.total_tokens)}</b></div>
       <div class="stat-card cache"><span>峰值（单日）</span><b>${fmt(peak)}</b></div>
@@ -609,6 +647,20 @@ async function refreshUsage() {
   $("usageBox").querySelectorAll("[data-win]").forEach((btn) => {
     btn.onclick = () => { state.usageWindow = btn.dataset.win; refreshUsage(); };
   });
+  const bindPrice = (id, key) => {
+    const el = $(id);
+    if (!el) return;
+    el.onchange = el.onblur = () => {
+      const next = loadPrices();
+      next[key] = Number(el.value || 0);
+      savePrices(next);
+      refreshUsage();
+    };
+  };
+  bindPrice("priceInput", "input");
+  bindPrice("priceOutput", "output");
+  bindPrice("priceCacheRead", "cache_read");
+  bindPrice("priceCacheWrite", "cache_write");
   const exp = $("usageExport");
   if (exp) exp.onclick = async () => {
     const res = await fetch(`/api/usage/export.xlsx?window=${win}`, { headers: { Authorization: `Bearer ${state.token}` } });

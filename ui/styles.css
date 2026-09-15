@@ -246,6 +246,10 @@ button.ghost {
 }
 .muted { color: var(--muted); }
 .usage-card .big { color: var(--ink-soft); }
+.price-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.price-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.price-grid input { width: 100%; }
+.cost-total { font-size: 22px; font-weight: 700; color: var(--ink-soft); }
 .seg { display: flex; gap: 6px; flex-wrap: wrap; }
 .seg button {
   border: 1px solid var(--line); background: #fff; border-radius: 999px;
