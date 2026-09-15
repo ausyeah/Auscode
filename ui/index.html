@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AusCode</title>
-  <link rel="stylesheet" href="/ui-assets/styles.css?v=25" />
+  <link rel="stylesheet" href="/ui-assets/styles.css?v=27" />
 </head>
 <body>
   <div class="app">
@@ -72,6 +72,8 @@
             </div>
             <div class="row slash-wrap">
               <textarea id="prompt" placeholder="输入 / 引用技能或命令"></textarea>
+              <button class="ghost polish-btn" id="polishBtn" title="优化提示词">✨</button>
+              <button class="ghost hidden" id="undoPolishBtn" title="撤回优化">↩</button>
               <button class="primary" id="sendBtn">发送</button>
             </div>
           </div>
@@ -104,6 +106,6 @@
     </main>
   </div>
   <div id="slashMenu" class="slash-menu hidden"></div>
-  <script src="/ui-assets/app.js?v=26"></script>
+  <script src="/ui-assets/app.js?v=27"></script>
 </body>
 </html>

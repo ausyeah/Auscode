@@ -14,6 +14,8 @@ const state = {
   slashItems: [],
   slashIndex: 0,
   pendingSkills: [],
+  polishOriginal: "",
+  polishResult: "",
 };
 
 const PERM = {
@@ -472,6 +474,49 @@ async function send(preset, opts = {}) {
   state.pendingSkills = [];
   hideSlash();
   state.ws.send(JSON.stringify(payload));
+}
+
+function recentContext() {
+  return [...document.querySelectorAll(".bubble-wrap")].slice(-6).map((el) => {
+    const role = el.dataset.role === "user" ? "用户" : "助手";
+    const text = (el.querySelector(".bubble") || {}).textContent || "";
+    return `${role}：${text.slice(0, 400)}`;
+  }).join("\n");
+}
+
+async function polishPrompt() {
+  const box = $("prompt");
+  const draft = box.value.trim();
+  if (!draft || $("polishBtn").classList.contains("loading")) return;
+  const current = box.value;
+  if (!state.polishOriginal || current !== state.polishResult) state.polishOriginal = current;
+  $("polishBtn").classList.add("loading");
+  try {
+    const ctx = recentContext();
+    const text = ctx
+      ? `结合下面最近对话，把草稿改写成更具体、可执行的提示词，不要回答问题。\n\n最近对话：\n${ctx}\n\n草稿：\n${draft}`
+      : draft;
+    const out = await api(`/api/agents/${state.agentId}/chat/polish`, {
+      method: "POST",
+      body: JSON.stringify({ text, default_model: $("modelSelect").value || null }),
+    });
+    if (out && out.text) {
+      box.value = out.text;
+      state.polishResult = out.text;
+      $("undoPolishBtn").classList.remove("hidden");
+    }
+  } catch (err) {
+    box.title = String(err.message || err);
+  } finally {
+    $("polishBtn").classList.remove("loading");
+  }
+}
+
+function undoPolish() {
+  if (!state.polishOriginal) return;
+  $("prompt").value = state.polishOriginal;
+  state.polishResult = "";
+  $("undoPolishBtn").classList.add("hidden");
 }
 
 function hideSlash() {
@@ -1299,6 +1344,8 @@ $("nav").onclick = (e) => {
   if (btn) showPage(btn.dataset.page);
 };
 $("sendBtn").onclick = send;
+$("polishBtn").onclick = () => polishPrompt();
+$("undoPolishBtn").onclick = undoPolish;
 $("prompt").addEventListener("keydown", (e) => {
   const menuOpen = state.slashItems.length && !$("slashMenu").classList.contains("hidden");
   if (menuOpen && e.key === "ArrowDown") {
@@ -1319,7 +1366,12 @@ $("prompt").addEventListener("keydown", (e) => {
   if (e.key === "Escape") hideSlash();
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
 });
-$("prompt").addEventListener("input", () => { updateSlash().catch(() => {}); });
+$("prompt").addEventListener("input", () => {
+  if (state.polishResult && $("prompt").value !== state.polishResult) {
+    $("undoPolishBtn").classList.add("hidden");
+  }
+  updateSlash().catch(() => {});
+});
 $("slashMenu").onclick = (e) => {
   const btn = e.target.closest("button");
   if (!btn) return;

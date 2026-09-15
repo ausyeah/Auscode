@@ -178,8 +178,20 @@ select, input, textarea {
 }
 textarea { width: 100%; min-height: 72px; resize: none; }
 .row { display: flex; gap: 8px; align-items: flex-end; }
-.slash-wrap { position: relative; flex: 1; }
-.slash-wrap textarea { width: 100%; }
+.slash-wrap { position: relative; flex: 1; display: flex; gap: 8px; align-items: flex-end; }
+.slash-wrap textarea { width: 100%; flex: 1; }
+.polish-btn.loading {
+  pointer-events: none;
+  color: transparent;
+  position: relative;
+}
+.polish-btn.loading::after {
+  content: "";
+  position: absolute; inset: 7px;
+  border: 2px solid #c5d7db; border-top-color: #7a8fb0;
+  border-radius: 50%; animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 .slash-menu {
   position: fixed; width: min(420px, calc(100vw - 280px)); max-height: 280px;
   overflow: auto; background: #fff; border: 1px solid var(--line);
