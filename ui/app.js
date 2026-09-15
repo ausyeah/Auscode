@@ -83,26 +83,31 @@ function addBubble(role, text) {
 }
 
 let thinkTimer = null;
-function formatThink(sec) {
-  if (sec < 60) return `思考中 ${sec}s`;
+let thinkStartedAt = 0;
+function formatThink(sec, done) {
+  const prefix = done ? "已思考" : "思考中";
+  if (sec < 60) return `${prefix} ${sec}s`;
   const m = Math.floor(sec / 60);
   const s = sec % 60;
-  return `思考中 ${m}分${s}秒`;
+  return `${prefix} ${m}分${String(s).padStart(2, "0")}秒`;
+}
+function tickThink() {
+  const el = document.querySelector(".bubble.think.live");
+  if (!el) return;
+  const label = el.querySelector(".think-label");
+  if (label) label.textContent = formatThink(Math.max(0, Math.floor((Date.now() - thinkStartedAt) / 1000)), false);
 }
 function startThinkStatus() {
-  stopThinkStatus();
   let el = document.querySelector(".bubble.think.live");
   if (!el) {
     el = document.createElement("div");
     el.className = "bubble think live";
-    el.innerHTML = `<span class="think-dot"></span><span class="think-label">${formatThink(0)}</span>`;
+    el.innerHTML = `<span class="think-dot"></span><span class="think-label">${formatThink(0, false)}</span>`;
     $("messages").appendChild(el);
+    thinkStartedAt = Date.now();
   }
-  const t0 = Date.now();
-  thinkTimer = setInterval(() => {
-    const label = el.querySelector(".think-label");
-    if (label) label.textContent = formatThink(Math.floor((Date.now() - t0) / 1000));
-  }, 500);
+  if (!thinkTimer) thinkTimer = setInterval(tickThink, 250);
+  tickThink();
   $("messages").scrollTop = $("messages").scrollHeight;
   return el;
 }
@@ -110,10 +115,47 @@ function finishThinkStatus() {
   const el = document.querySelector(".bubble.think.live");
   if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null; }
   if (!el) return;
-  const label = el.querySelector(".think-label");
-  const text = label ? label.textContent.replace("思考中", "已思考") : "已思考";
+  const sec = Math.max(0, Math.floor((Date.now() - thinkStartedAt) / 1000));
   el.classList.remove("live");
-  el.innerHTML = text;
+  el.innerHTML = formatThink(sec, true);
+}
+
+function toolNameFrom(frame) {
+  return frame.name || frame.tool || frame.tool_name || (frame.data && (frame.data.name || frame.data.tool)) || "工具";
+}
+function upsertToolCard(id, name, status, detail) {
+  const key = String(id || name);
+  let el = [...document.querySelectorAll(".tool-card")].find((n) => n.dataset.tool === key);
+  if (!el) {
+    el = document.createElement("div");
+    el.className = "tool-card";
+    el.dataset.tool = key;
+    $("messages").appendChild(el);
+  }
+  el.innerHTML = `<b>${name}</b><span class="tool-status">${status}</span>${detail ? `<pre>${detail}</pre>` : ""}`;
+  $("messages").scrollTop = $("messages").scrollHeight;
+}
+function handleToolFrame(frame) {
+  const t = frame.type || "";
+  const name = toolNameFrom(frame);
+  const id = frame.id || frame.tool_call_id || (frame.data && frame.data.id) || name;
+  if (t === "tool_start" || t === "tool_call" || t === "tool_use") {
+    const args = frame.args || frame.input || (frame.data && (frame.data.args || frame.data.input));
+    const detail = args ? JSON.stringify(args, null, 0).slice(0, 240) : "";
+    upsertToolCard(id, name, "调用中", detail);
+    return true;
+  }
+  if (t === "tool_result" || t === "tool_end" || t === "tool") {
+    const out = frame.output || frame.result || frame.content || (frame.data && (frame.data.output || frame.data.content));
+    const text = typeof out === "string" ? out : extractText(out);
+    upsertToolCard(id, name, "完成", (text || "").slice(0, 400));
+    return true;
+  }
+  if (t === "hitl_required") {
+    upsertToolCard(id, name, "等待确认", "需要你批准后才能继续");
+    return true;
+  }
+  return false;
 }
 
 function setPermLabel() {
@@ -139,6 +181,7 @@ function connectWs() {
     let frame;
     try { frame = JSON.parse(ev.data); } catch { return; }
     const t = frame.type;
+    if (handleToolFrame(frame)) return;
     if (t === "reasoning") {
       startThinkStatus();
       return;
@@ -171,8 +214,18 @@ function connectWs() {
       refreshUsage();
     }
     if (t === "error" || t === "turn_error") addBubble("think", frame.message || JSON.stringify(frame));
-        if (t === "state_snapshot") {
+        if (t === "state_snapshot" || t === "state_update") {
       const msgs = (frame.data && frame.data.messages) || [];
+      msgs.forEach((m) => {
+        const role = m.role || m.type;
+        const blocks = Array.isArray(m.content) ? m.content : [];
+        blocks.forEach((b) => {
+          if (!b || typeof b !== "object") return;
+          if (b.type === "tool_use") handleToolFrame({ type: "tool_use", name: b.name, id: b.id, args: b.input });
+          if (b.type === "tool_result") handleToolFrame({ type: "tool_result", id: b.id, output: b.output || b.content });
+        });
+        if (role === "tool") handleToolFrame({ type: "tool_result", name: m.name, id: m.tool_call_id, output: m.content });
+      });
       const last = msgs[msgs.length - 1];
       if (last && (last.type === "ai" || last.role === "assistant") && last.content) {
         const visible = extractText(last.content);
@@ -183,7 +236,6 @@ function connectWs() {
         }
       }
     }
-    if (t === "hitl_required") addBubble("think", "需要确认后才能继续。请在权限档位中选择，或回复批准。");
   };
 }
 
@@ -254,6 +306,16 @@ async function openThread(id) {
     const role = m.role || m.type;
     const content = extractText(m.content);
     if (!content) return;
+    const blocks = Array.isArray(m.content) ? m.content : [];
+    blocks.forEach((b) => {
+      if (!b || typeof b !== "object") return;
+      if (b.type === "tool_use") handleToolFrame({ type: "tool_use", name: b.name, id: b.id, args: b.input });
+      if (b.type === "tool_result") handleToolFrame({ type: "tool_result", id: b.id, name: b.name, output: b.output || b.content });
+    });
+    if (role === "tool") {
+      handleToolFrame({ type: "tool_result", name: m.name, id: m.tool_call_id || m.id, output: m.content });
+      return;
+    }
     if (role === "user" || role === "human") addBubble("user", content);
     else if (role === "assistant" || role === "ai") addBubble("assistant", content);
   });

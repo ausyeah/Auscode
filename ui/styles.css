@@ -95,6 +95,16 @@ body {
   background: var(--accent); margin-right: 8px; animation: pulse 1s ease-in-out infinite;
 }
 @keyframes pulse { 50% { opacity: 0.25; } }
+.tool-card {
+  max-width: 78%; padding: 10px 12px; border-radius: 12px;
+  border: 1px dashed var(--line); background: #f7f1e6; color: var(--ink); font-size: 13px;
+}
+.tool-card b { font-weight: 700; }
+.tool-card .tool-status { color: var(--muted); margin-left: 8px; }
+.tool-card pre {
+  margin: 8px 0 0; white-space: pre-wrap; color: var(--muted);
+  font-family: var(--fang); font-size: 12px; max-height: 120px; overflow: auto;
+}
 .settings h3, .panel h3, .usage-card h4, .panel h4 { font-weight: 700; }
 .composer { padding: 12px; border-top: 1px solid var(--line); }
 .toolbar { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
