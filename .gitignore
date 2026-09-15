@@ -1,14 +1,5 @@
-# runtime data (AUSCODE_HOME = this dir)
-config.json
-credential.txt
-*.db
-*.db-shm
-*.db-wal
-logs/
-plugins/
-browser-profiles/
-security/
-.salt
+# runtime data (AUSCODE_HOME = ./data)
+data/
 *.log
 
 # heavy / machine-specific

@@ -5,12 +5,11 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from scalar_fastapi import get_scalar_api_reference
 
 from auscode.api.middleware.jwt_auth import install as install_jwt_auth
@@ -28,45 +27,6 @@ class _RouterMount:
     router: Any
     prefix: str
     tags: Sequence[str]
-
-
-_NO_CACHE_DASHBOARD_NAMES = frozenset({"sw.js", "manifest.json", "index.html"})
-
-
-def dashboard_cache_control(full_path: str) -> str | None:
-    """Cache-Control for a dashboard SPA path, or ``None`` to leave unset."""
-    name = Path(full_path).name.lower() if full_path else "index.html"
-    if not full_path or name in _NO_CACHE_DASHBOARD_NAMES:
-        return "no-cache"
-    # Vite emits content-hashed files under assets/ — safe to pin forever.
-    if full_path.startswith("assets/"):
-        return "public, max-age=31536000, immutable"
-    return None
-
-
-def _dashboard_response(path: Path, full_path: str) -> FileResponse:
-    response = FileResponse(path)
-    cache_control = dashboard_cache_control(full_path)
-    if cache_control is not None:
-        response.headers["Cache-Control"] = cache_control
-    return response
-
-
-def is_dashboard_asset_path(full_path: str) -> bool:
-    """True for hashed build artifacts that must 404 instead of falling back."""
-    return full_path.startswith("assets/")
-
-
-def _dashboard_fallback(index_file: Path, full_path: str) -> FileResponse:
-    """Serve the SPA shell for routes; 404 for a missing hashed asset.
-
-    Answering ``/assets/index.<old-hash>.js`` with ``index.html`` makes the
-    browser reject HTML as a module script ("not a valid JavaScript MIME
-    type"), which hides the real cause — a stale shell after an upgrade.
-    """
-    if is_dashboard_asset_path(full_path):
-        raise HTTPException(status_code=404, detail="Not Found")
-    return _dashboard_response(index_file, "")
 
 
 def _mount_routers(app: FastAPI, mounts: Sequence[_RouterMount]) -> None:
@@ -100,11 +60,7 @@ def _install_exception_handlers(app: FastAPI) -> None:
 
 def build_app(server: AusCodeServer) -> FastAPI:
     cfg = server.services.config if server.services else getattr(server, "config", None)
-    enable_dashboard = cfg.enable_dashboard if cfg else True
     enable_api_docs = cfg.enable_api_docs if cfg else False
-    enable_mobile = (
-        cfg.capabilities.mobile.enabled if cfg and cfg.capabilities.mobile.enabled else False
-    )
 
     app = FastAPI(
         title="AusCode API",
@@ -148,26 +104,21 @@ def build_app(server: AusCodeServer) -> FastAPI:
         agent_tools,
         agents,
         auth,
-        auth_oidc,
         backup,
         browser,
-        channels,
         chat,
         connectors,
         cron,
-        desktop,
         envs,
         experts,
         health,
         i18n,
         internal_mcp,
-        invites,
         knowledge_bases,
         mbti,
         media_generation,
         memory,
         memory_portable,
-        mobile,
         ollama_models,
         onnx_models,
         plugins,
@@ -182,11 +133,9 @@ def build_app(server: AusCodeServer) -> FastAPI:
         slash,
         subagents,
         terminal,
-        update,
         uploads,
         usage,
         users,
-        voice,
         workspace,
     )
     from auscode.api.routers.filesystem import router as filesystem_router
@@ -196,19 +145,15 @@ def build_app(server: AusCodeServer) -> FastAPI:
     from auscode.api.routers.storage_backends import admin_router as admin_storage_router
     from auscode.api.routers.storage_backends import user_router as storage_backends_user_router
     from auscode.api.routers.tls import router as tls_router
-    from auscode.api.routers.voice import admin_router as admin_voice_router
 
     _mount_routers(
         app,
         [
             _RouterMount(setup.router, "/api", ["setup"]),
             _RouterMount(auth.router, "/api/auth", ["auth"]),
-            _RouterMount(auth_oidc.router, "/api/auth", ["auth"]),
-            _RouterMount(invites.public_router, "/api/auth/invite", ["auth"]),
             _RouterMount(preferences.router, "/api", ["auth"]),
             _RouterMount(i18n.router, "/api", ["i18n"]),
             _RouterMount(health.router, "/api/health", ["health"]),
-            _RouterMount(invites.admin_router, "/api/users/invites", ["users"]),
             _RouterMount(users.router, "/api/users", ["users"]),
             _RouterMount(agents.router, "/api/agents", ["agents"]),
             _RouterMount(agent_tools.router, "/api", ["agents"]),
@@ -218,17 +163,14 @@ def build_app(server: AusCodeServer) -> FastAPI:
             _RouterMount(connectors.router, "/api", ["connectors"]),
             _RouterMount(knowledge_bases.router, "/api", ["knowledge"]),
             _RouterMount(internal_mcp.router, "/api", ["internal-mcp"]),
-            _RouterMount(channels.router, "/api", ["channels"]),
             _RouterMount(cron.router, "/api", ["cron"]),
             _RouterMount(settings.router, "/api", ["settings"]),
             _RouterMount(envs.router, "/api", ["envs"]),
             _RouterMount(search.router, "/api", ["search"]),
             _RouterMount(providers.router, "/api/providers", ["providers"]),
-            _RouterMount(voice.router, "/api/voice", ["voice"]),
             _RouterMount(admin.router, "/api/admin", ["admin"]),
             _RouterMount(backup.router, "/api/admin", ["admin"]),
             _RouterMount(admin_providers_router, "/api/admin/providers", ["admin"]),
-            _RouterMount(admin_voice_router, "/api/admin/voice/providers", ["admin"]),
             _RouterMount(observability_router, "/api/admin/observability", ["observability"]),
             _RouterMount(
                 media_generation.router,
@@ -256,22 +198,12 @@ def build_app(server: AusCodeServer) -> FastAPI:
             _RouterMount(subagents.router, "/api", ["subagents"]),
             _RouterMount(terminal.router, "/api", ["terminal"]),
             _RouterMount(uploads.router, "/api", ["chat"]),
-            _RouterMount(update.router, "/api", ["update"]),
             _RouterMount(browser.router, "/api", ["browser"]),
-            _RouterMount(desktop.router, "/api", ["desktop"]),
             _RouterMount(ollama_models.router, "/api", ["ollama"]),
             _RouterMount(onnx_models.router, "/api", ["onnx"]),
             _RouterMount(plugins.router, "/api", ["plugins"]),
         ],
     )
-
-    if enable_mobile:
-        _mount_routers(
-            app,
-            [
-                _RouterMount(mobile.router, "/api", ["mobile"]),
-            ],
-        )
 
     if enable_api_docs:
 
@@ -281,30 +213,5 @@ def build_app(server: AusCodeServer) -> FastAPI:
                 openapi_url=app.openapi_url,
                 title="AusCode API",
             )
-
-    if enable_dashboard:
-        dashboard_dir = Path(__file__).parent.parent / "dashboard"
-        index_file = dashboard_dir / "index.html"
-        if index_file.exists():
-
-            @app.get("/{full_path:path}", include_in_schema=False)
-            async def spa_fallback(full_path: str) -> FileResponse:
-                if full_path.startswith(("api/", "ws/")):
-                    raise HTTPException(status_code=404, detail="Not Found")
-
-                if full_path:
-                    raw_path = Path(full_path)
-                    # Reject absolute paths and parent-dir references before
-                    # joining, so user input never drives a path expression.
-                    if raw_path.is_absolute() or ".." in raw_path.parts:
-                        return _dashboard_fallback(index_file, full_path)
-                    candidate = (dashboard_dir / Path(*raw_path.parts)).resolve()
-                    try:
-                        candidate.relative_to(dashboard_dir.resolve())
-                    except ValueError:
-                        return _dashboard_fallback(index_file, full_path)
-                    if candidate.is_file():
-                        return _dashboard_response(candidate, full_path)
-                return _dashboard_fallback(index_file, full_path)
 
     return app

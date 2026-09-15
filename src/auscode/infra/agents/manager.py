@@ -2684,14 +2684,6 @@ class AgentManager:
         )
 
         mobile_tools: list[Any] = []
-        if self._config.capabilities.mobile.enabled:
-            from auscode.infra.mobile.tools import build_mobile_tools  # noqa: PLC0415
-
-            mobile_tools = build_mobile_tools(
-                self._config,
-                user_repo=self._repos.user_repo,
-                paths=self.paths,
-            )
 
         from harness_agent.plugins import PluginRegistry, build_plugin_tools  # noqa: PLC0415
 

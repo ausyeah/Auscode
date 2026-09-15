@@ -2,7 +2,7 @@
 
 > 基于 Octop（MIT）套皮的独立后端 AI 助手服务 · 准备阶段文档 · 2026-09-15
 >
-> 状态：**需求已全部确认，待开工**。本文档是开工的完整依据，需求、现状、方案、计划、风险、验收标准均已固化；第 11 节六个问题已于 2026-09-15 全部拍板。
+> 状态：**一期已完成（2026-09-15 执行完毕，见文末执行记录）**。本文档是开工的完整依据，需求、现状、方案、计划、风险、验收标准均已固化；第 11 节六个问题已于 2026-09-15 全部拍板。
 
 ---
 
@@ -247,3 +247,16 @@ D:\AusCode\
 **术语**
 - 内核 = harness-agent 系列包（agent 循环/工具/子代理/记忆/浏览器/网关）；壳层 = octop（API 服务 + 插件 + 知识库 + 用户体系）
 - 套皮 = vendor 壳层代码并整体品牌化；vendor = 把依赖代码复制进自己仓库接管维护
+
+---
+
+## 13. 执行记录（2026-09-15 实际完成情况）
+
+与计划的差异与补充事实（以本节为准）：
+
+1. **布局调整**：源码不在 venv 内，放 `D:\AusCode\src\auscode`，venv site-packages 通过 `auscode.pth` 指向它（可 git 管理、可编辑安装）。**运行数据放 `D:\AusCode\data\`**（AUSCODE_HOME 指向它），与代码目录分离——因为 `auscode init --force` 会清空 home，绝不能指向项目根。
+2. **改名先于裁剪执行**（原计划 Phase 1 裁剪、Phase 2 改名）：477 文件、3975 处替换（OCTOP_/Octop/octop 三形态），残留 0。工具：`tools/rename_octop_to_auscode.py`。
+3. **物理裁剪实际范围**（git 历史可查）：dashboard 资源、`infra/{voice,mobile,desktop}`、`infra/gateway/{bot_creators,channels}`、路由 voice/channels/desktop/mobile/invites/auth_oidc/update、CLI `channel`/`update` 命令、`cli/support/feishu_creator.py`；同步摘除 `infra/server.py` 移动端探测、`infra/agents/manager.py` mobile 工具装配、`infra/browser/setup.py` 虚拟桌面注入。**保留**：`infra/db/repos/channels.py`（DB 层，与 migrations 纠缠）与内核 harness_gateway 的通用 ChannelManager（无注册入口后永久为空）；`infra/users/invites.py`+`db/repos/invites.py`（同上，API 面已删）。connectors 的 feishu-cli 是 MCP 工具连接器（非 IM 机器人），按决策保留。
+4. **单用户落地**：`AUSCODE_HOME=D:\AusCode\data auscode init --yes`（环境变量传管理员账号）+ `tools/bootstrap_token.py` 用 DB 内 jwt 密钥签 10 年期 Token 写 `data/credential.txt`。`X-AusCode-Access-Token` 滑动续期保留。
+5. **验收结果**（详见会话记录）：health/docs 200；无 Token 401、带 Token 200；voice/channels/desktop/invites 路由 404（openapi 确认 0 残留，共 293 条路由）；plugins/knowledge-bases/browser/cron/providers/connectors catalog/memory 全 200；CLI `auscode version`/`--help` 正常；重启后 Token、agent、配置全部持久。src 内 `octop` 字样 0 残留。
+6. **已知事实**：RAG 本地向量模型目录（embedding_models）原安装即为空，RAG 首次使用时需按其配置拉取 embedding 服务/模型；默认未配 provider 时 agent 启动报 `no_models_configured`（预期），配置 provider 后即恢复；`src/auscode` 已随本项目 git 管理（首个 commit 为改名后基线）。

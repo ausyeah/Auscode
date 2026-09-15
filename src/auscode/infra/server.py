@@ -23,7 +23,6 @@ from auscode.infra.db.factory import open_database, should_defer_control_plane_d
 from auscode.infra.db.migrate import run_migrations
 from auscode.infra.db.services import SharedServices, build_shared_services
 from auscode.infra.gateway.gateway import Gateway
-from auscode.infra.mobile.config_probe import ensure_mobile_capabilities_probed
 from auscode.infra.proactive.scheduler import ProactiveCareScheduler
 from auscode.infra.proactive.service import ProactiveCareService
 from auscode.infra.setup import password_file as _wizard_pw
@@ -291,7 +290,7 @@ class AusCodeServer:
 
         apply_env_file(env_file_path(self.paths.root))
         self._setup_logging()
-        config = ensure_mobile_capabilities_probed(self.paths.config)
+        config = load_config(self.paths.config)
         self.config = config
 
         self.expert_catalog = ExpertCatalog(

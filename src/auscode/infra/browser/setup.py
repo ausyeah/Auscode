@@ -108,14 +108,6 @@ def resolve_browser_display() -> str | None:
     current = (os.environ.get("DISPLAY") or "").strip()
     if current:
         candidates.append(current)
-    try:
-        from auscode.infra.desktop.setup import _display_from_env_file  # noqa: PLC0415
-
-        from_file = _display_from_env_file()
-        if from_file and from_file not in candidates:
-            candidates.append(from_file)
-    except Exception:  # noqa: BLE001
-        pass
     if ":99" not in candidates:
         candidates.append(":99")
 
