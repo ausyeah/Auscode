@@ -281,6 +281,12 @@ button.ghost {
   padding: 8px 0; border-bottom: 1px dashed var(--line);
 }
 .switch-row small { margin-left: auto; color: var(--muted); }
+.mem-list { display: flex; flex-direction: column; gap: 10px; }
+.mem-card {
+  border: 1px solid var(--line); border-radius: 14px; padding: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.85), #eef3f7);
+}
+.mem-text { margin: 6px 0 10px; line-height: 1.55; }
 .usage-card .big { color: var(--ink-soft); }
 .price-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .price-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }

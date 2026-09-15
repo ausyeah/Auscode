@@ -894,26 +894,78 @@ async function loadCron() {
   };
 }
 
+function memoryText(it) {
+  if (!it) return "";
+  if (typeof it === "string") return it;
+  return it.assertion || it.text || it.content || it.summary || "";
+}
+function memoryCard(it) {
+  const text = memoryText(it);
+  if (!text) return "";
+  const id = it.id || "";
+  const kind = it.kind || it.entity_type || "Fact";
+  return `<div class="mem-card" data-id="${id}">
+    <div class="muted">${kind}</div>
+    <div class="mem-text">${text.replace(/</g, "&lt;")}</div>
+    <div class="row">
+      <button class="ghost" data-edit="${id}">修改</button>
+      <button class="ghost" data-delmem="${id}">删除</button>
+    </div>
+  </div>`;
+}
 async function loadMemory() {
-  const [counts, about, focus, told] = await Promise.all([
-    api(`/api/agents/${state.agentId}/memory/stats/counts`),
-    api(`/api/agents/${state.agentId}/memory/terminal/about_me`).catch(() => ({ items: [] })),
-    api(`/api/agents/${state.agentId}/memory/terminal/current_focus`).catch(() => ({ items: [] })),
-    api(`/api/agents/${state.agentId}/memory/terminal/things_you_told_me`).catch(() => ({ items: [] })),
+  const [counts, atoms] = await Promise.all([
+    api(`/api/agents/${state.agentId}/memory/stats/counts`).catch(() => ({})),
+    api(`/api/agents/${state.agentId}/memory/atoms/list`, { method: "POST", body: JSON.stringify({ include_deprecated: false }) }).catch(() => ({ items: [] })),
   ]);
-  const lines = (block) => (block.items || block.entries || []).map((it) =>
-    `<div class="list-item">${typeof it === "string" ? it : (it.text || it.content || JSON.stringify(it))}</div>`
-  ).join("") || "<p style='color:var(--muted)'>暂无</p>";
+  const items = atoms.items || [];
   $("memoryBox").innerHTML = `
     <h3>记忆</h3>
-    <p style="color:var(--muted);margin:0">项目级长期记忆。对话里重要结论会沉淀到这里，也可在工作区 MEMORY.md 里改。</p>
-    <div class="kv"><span>原子记忆</span><b>${counts.atoms || 0}</b></div>
-    <div class="kv"><span>实体</span><b>${counts.entities || 0}</b></div>
-    <div class="kv"><span>事件</span><b>${counts.raw_events || 0}</b></div>
-    <h4>关于我</h4>${lines(about)}
-    <h4>当前焦点</h4>${lines(focus)}
-    <h4>你告诉过我的</h4>${lines(told)}
+    <p class="muted">只显示结论，可手动补充或改掉过时内容。删除会把这条标为废弃。</p>
+    <div class="kv"><span>记忆条数</span><b>${counts.atoms || items.length}</b></div>
+    <textarea id="memNew" placeholder="新增一条记忆，例如：我主要在 Windows 上工作"></textarea>
+    <div class="row"><button class="primary" id="memAdd">添加记忆</button></div>
+    <div id="memMsg" class="muted"></div>
+    <div class="mem-list">${items.map(memoryCard).join("") || "<p class='muted'>还没有记忆</p>"}</div>
   `;
+  $("memAdd").onclick = async () => {
+    const assertion = $("memNew").value.trim();
+    if (!assertion) return;
+    try {
+      await api(`/api/agents/${state.agentId}/memory/atoms`, {
+        method: "POST",
+        body: JSON.stringify({ assertion, entity_type: "Fact", kind: "Fact", importance: "medium" }),
+      });
+      loadMemory();
+    } catch (err) { $("memMsg").textContent = String(err.message || err); }
+  };
+  $("memoryBox").onclick = async (e) => {
+    const edit = e.target.dataset.edit;
+    const del = e.target.dataset.delmem;
+    const card = e.target.closest(".mem-card");
+    if (edit && card) {
+      const old = card.querySelector(".mem-text").textContent;
+      const next = prompt("修改这条记忆", old);
+      if (!next || next === old) return;
+      try {
+        await api(`/api/agents/${state.agentId}/memory/atoms/${edit}:replace`, {
+          method: "POST",
+          body: JSON.stringify({ assertion: next, reason: "user edit" }),
+        });
+        loadMemory();
+      } catch (err) { $("memMsg").textContent = String(err.message || err); }
+    }
+    if (del) {
+      if (!confirm("删除这条记忆？")) return;
+      try {
+        await api(`/api/agents/${state.agentId}/memory/atoms/${del}:deprecate`, {
+          method: "POST",
+          body: JSON.stringify({ reason: "user delete" }),
+        });
+        loadMemory();
+      } catch (err) { $("memMsg").textContent = String(err.message || err); }
+    }
+  };
 }
 
 async function loadModelPage() {
