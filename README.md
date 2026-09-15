@@ -7,8 +7,9 @@ TencentCloud harness-agent（内核）深度定制换皮而来，详见 `THIRD-P
 ## 快速开始
 
 ```
-启动：双击 auscode-start.bat          （会打开接口说明书网页）
-停止：双击 auscode-stop.bat
+启动服务：双击 auscode-start.bat      （会打开接口说明书网页）
+跟 AI 对话：双击 auscode-chat.bat     （命令行聊天，这才是日常用法）
+停止服务：双击 auscode-stop.bat
 验收：双击 run-acceptance.bat
 ```
 
@@ -32,6 +33,31 @@ Authorization: Bearer <credential.txt 中的 Token>
 ```
 
 重新签发 Token：`set AUSCODE_HOME=D:\AusCode\data && venv\Scripts\python.exe tools\bootstrap_token.py`
+
+## 怎么跟 AI 对话
+
+文档页（`/api/docs`）只是接口说明书，**不是聊天窗口**。日常用法是命令行：
+
+1. 先双击 `auscode-start.bat` 把服务拉起来（已经在跑就跳过）
+2. 再双击 `auscode-chat.bat`
+3. 出现提示后直接打字，回车发送。例如：`帮我看看 D:\AusCode\README.md 里怎么启动`
+4. 退出：`Ctrl+C`
+
+也可以只发一句、不进持续聊天：
+
+```
+cd /d D:\AusCode
+set AUSCODE_HOME=D:\AusCode\data
+venv\Scripts\python.exe -m auscode chats send --agent TV3AHW "你好，介绍一下你能做什么"
+```
+
+换备用模型（glm-5.3-flash）：
+
+```
+venv\Scripts\python.exe -m auscode chats send --agent TV3AHW --model glm-5.3-flash "你好"
+```
+
+没有网页聊天界面是当时按「只要后端 API」裁掉的。如果后面要网页对话框，可以再加一层套皮前端。
 
 ## 怎么验收
 
