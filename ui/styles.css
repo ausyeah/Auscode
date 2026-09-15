@@ -228,11 +228,17 @@ button.ghost {
 .settings, .panel { overflow: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-height: 0; height: 100%; }
 .ctx-pop { position: relative; cursor: default; }
 .ctx-menu {
-  display: none; position: absolute; top: 22px; left: 0; width: 280px;
+  display: none; position: absolute; top: 22px; left: 0; width: 320px;
   background: #fff; border: 1px solid var(--line); border-radius: 14px;
   box-shadow: var(--shadow); padding: 12px; z-index: 6; color: var(--ink);
 }
 .ctx-pop:hover .ctx-menu { display: block; }
+.ctx-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: 13px; }
+.ctx-meter { height: 8px; background: #e8eef3; border-radius: 99px; overflow: hidden; display: flex; margin-bottom: 10px; }
+.ctx-meter i { display: block; height: 100%; }
+.ctx-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 13px; }
+.ctx-row span { flex: 1; }
+.ctx-row b { color: var(--muted); font-weight: 500; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .kv { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed var(--line); }
 .list-item { padding: 10px 0; border-bottom: 1px solid var(--line); }

@@ -693,16 +693,37 @@ async function openThread(id) {
   await refreshContext();
 }
 
+const CTX_META = {
+  conversation: { label: "消息", color: "#6aa8d6" },
+  mcp: { label: "MCP 工具", color: "#7aa7e0" },
+  tool_definitions: { label: "系统工具", color: "#8bb8e8" },
+  system_prompt: { label: "系统提示词", color: "#9ec4d4" },
+  skills: { label: "技能", color: "#b7aec8" },
+  subagent_definitions: { label: "子智能体", color: "#c4b7d6" },
+  rules: { label: "规则", color: "#d9b8c8" },
+};
 async function refreshContext() {
   if (!state.threadId) return;
   try {
     const ctx = await api(`/api/agents/${state.agentId}/threads/${state.threadId}/context-usage`);
     const used = ctx.used_tokens || 0;
     const max = ctx.max_tokens || 128000;
-    $("ctxPct").textContent = `${Math.round(used * 100 / max)}% · ${fmt(used)}/${fmt(max)}`;
-    const segs = ctx.segments || [];
-    $("ctxMenu").innerHTML = `<div style="margin-bottom:8px">已用 ${Math.round(used * 100 / max)}%，这是当前上下文窗口占用。</div>` +
-      (segs.map((s) => `<div class="kv"><span>${s.label || s.key}</span><b>${fmt(s.tokens)}</b></div>`).join("") || "<div>暂无分段</div>");
+    const pct = Math.round(used * 1000 / max) / 10;
+    $("ctxPct").textContent = `${pct}% · ${fmt(used)}/${fmt(max)}`;
+    const segs = (ctx.segments || []).map((s) => ({
+      key: s.key,
+      tokens: Number(s.tokens || 0),
+      ...(CTX_META[s.key] || { label: s.key, color: "#c9b6a4" }),
+    })).filter((s) => s.tokens > 0);
+    const known = segs.reduce((n, s) => n + s.tokens, 0);
+    if (used > known) segs.push({ key: "other", tokens: used - known, label: "其他", color: "#c5d0d6" });
+    const meter = segs.map((s) => `<i style="width:${Math.max(1, s.tokens * 100 / max)}%;background:${s.color}"></i>`).join("");
+    const rows = segs.map((s) => `<div class="ctx-row"><i class="dot" style="background:${s.color}"></i><span>${s.label}</span><b>${((s.tokens * 100) / Math.max(used, 1)).toFixed(1)}%</b></div>`).join("");
+    $("ctxMenu").innerHTML = `
+      <div class="ctx-head"><span>上下文容量</span><b>${fmt(used)}/${fmt(max)}（${pct}%）</b></div>
+      <div class="ctx-meter">${meter || "<i style='width:0'></i>"}</div>
+      ${rows || "<div class='muted'>暂无分段</div>"}
+    `;
   } catch {}
 }
 
