@@ -14,7 +14,7 @@
         <button data-page="chat" class="active">对话</button>
         <button data-page="cron">自动化</button>
         <button data-page="usage">Token 统计</button>
-        <button data-page="knowledge">知识库</button>
+        <button data-page="memory">记忆</button>
         <button data-page="models">模型</button>
         <button data-page="plugins">插件</button>
         <button data-page="security">权限</button>
@@ -43,7 +43,9 @@
         <div class="card threads" id="threadList"></div>
         <div class="card chat-main">
           <div class="stats">
-            <div>上下文 <b id="ctxPct">—</b></div>
+            <div class="ctx-pop">上下文 <b id="ctxPct">—</b>
+              <div class="ctx-menu" id="ctxMenu">把鼠标放在「上下文」上看分段</div>
+            </div>
             <div>速度 <b id="tokSpeed">—</b></div>
             <div>本轮 <b id="turnUsage">—</b></div>
             <div>缓存 <b id="turnCache">—</b></div>
@@ -78,7 +80,7 @@
 
       <section class="page" id="page-cron"><div class="card panel" id="cronBox"></div></section>
       <section class="page" id="page-usage"><div class="card panel" id="usageBox"></div></section>
-      <section class="page" id="page-knowledge"><div class="card panel" id="knowledgeBox"></div></section>
+      <section class="page" id="page-memory"><div class="card panel" id="memoryBox"></div></section>
       <section class="page" id="page-models"><div class="card panel" id="modelsBox"></div></section>
       <section class="page" id="page-plugins"><div class="card panel" id="pluginsBox"></div></section>
       <section class="page" id="page-security"><div class="card panel" id="securityBox"></div></section>
@@ -104,6 +106,6 @@
       </section>
     </main>
   </div>
-  <script src="/ui-assets/app.js?v=3"></script>
+  <script src="/ui-assets/app.js?v=4"></script>
 </body>
 </html>

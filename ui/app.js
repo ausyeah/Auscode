@@ -20,7 +20,7 @@ const PERM = {
 
 const $ = (id) => document.getElementById(id);
 const titles = {
-  chat: "当前会话", cron: "自动化", usage: "Token 统计", knowledge: "知识库",
+  chat: "当前会话", cron: "自动化", usage: "Token 统计", memory: "记忆",
   models: "模型", plugins: "插件", security: "权限", settings: "设置",
 };
 
@@ -189,10 +189,25 @@ async function loadThreads() {
   (rows || []).forEach((t) => {
     const el = document.createElement("div");
     el.className = "thread" + (t.thread_id === state.threadId ? " active" : "");
-    el.innerHTML = `<b>${t.title || "未命名"}</b><small>${t.channel_type || ""}</small>`;
-    el.onclick = () => openThread(t.thread_id);
+    el.innerHTML = `<b>${t.title || "未命名"}</b><small>${t.channel_type || ""}</small><button class="del" title="删除" data-del="${t.thread_id}">×</button>`;
+    el.onclick = (e) => {
+      if (e.target.dataset.del) return;
+      openThread(t.thread_id);
+    };
     box.appendChild(el);
   });
+  box.onclick = async (e) => {
+    const id = e.target.dataset.del;
+    if (!id) return;
+    e.stopPropagation();
+    await api(`/api/agents/${state.agentId}/threads/${id}`, { method: "DELETE" });
+    if (state.threadId === id) {
+      state.threadId = "";
+      $("messages").innerHTML = "";
+      $("pageTitle").textContent = "当前会话";
+    }
+    loadThreads();
+  };
 }
 
 async function openThread(id) {
@@ -220,6 +235,9 @@ async function refreshContext() {
     const used = ctx.used_tokens || 0;
     const max = ctx.max_tokens || 128000;
     $("ctxPct").textContent = `${Math.round(used * 100 / max)}% · ${fmt(used)}/${fmt(max)}`;
+    const segs = ctx.segments || [];
+    $("ctxMenu").innerHTML = `<div style="margin-bottom:8px">已用 ${Math.round(used * 100 / max)}%，这是当前上下文窗口占用。</div>` +
+      (segs.map((s) => `<div class="kv"><span>${s.label || s.key}</span><b>${fmt(s.tokens)}</b></div>`).join("") || "<div>暂无分段</div>");
   } catch {}
 }
 
@@ -284,7 +302,7 @@ function showPage(name) {
   $("crumb").textContent = titles[name] || name;
   $("pageTitle").textContent = titles[name] || name;
   const loaders = {
-    cron: loadCron, usage: refreshUsage, knowledge: loadKnowledge,
+    cron: loadCron, usage: refreshUsage, memory: loadMemory,
     models: loadModelPage, plugins: loadPlugins, security: loadSecurity,
   };
   if (loaders[name]) loaders[name]();
@@ -332,60 +350,26 @@ async function loadCron() {
   };
 }
 
-async function loadKnowledge() {
-  const rows = await api("/api/knowledge-bases");
-  $("knowledgeBox").innerHTML = `
-    <h3>知识库</h3>
-    <p style="color:var(--muted);margin:0">先建库，再贴一段文本进去。对话时助手可以检索这些资料。</p>
-    <div class="form-grid">
-      <input id="kbName" placeholder="知识库名称" />
-      <input id="kbDesc" placeholder="说明，可选" />
-    </div>
-    <div class="row"><button class="primary" id="kbAdd">新建知识库</button></div>
-    <div id="kbMsg" style="color:var(--muted)"></div>
-    ${(rows || []).map((k) => {
-      const id = k.id || k.kb_id || k.base_id;
-      return `<div class="list-item" data-kbid="${id}">
-        <b>${k.name || id}</b>
-        <div style="color:var(--muted)">${k.description || ""}</div>
-        <textarea data-content="${id}" placeholder="粘贴要入库的文本"></textarea>
-        <div class="row">
-          <input data-title="${id}" placeholder="文件名，例如 notes.md" />
-          <button class="ghost" data-upload="${id}">写入文本</button>
-          <button class="ghost" data-delkb="${id}">删除库</button>
-        </div>
-      </div>`;
-    }).join("") || "<p>还没有知识库</p>"}
+async function loadMemory() {
+  const [counts, about, focus, told] = await Promise.all([
+    api(`/api/agents/${state.agentId}/memory/stats/counts`),
+    api(`/api/agents/${state.agentId}/memory/terminal/about_me`).catch(() => ({ items: [] })),
+    api(`/api/agents/${state.agentId}/memory/terminal/current_focus`).catch(() => ({ items: [] })),
+    api(`/api/agents/${state.agentId}/memory/terminal/things_you_told_me`).catch(() => ({ items: [] })),
+  ]);
+  const lines = (block) => (block.items || block.entries || []).map((it) =>
+    `<div class="list-item">${typeof it === "string" ? it : (it.text || it.content || JSON.stringify(it))}</div>`
+  ).join("") || "<p style='color:var(--muted)'>暂无</p>";
+  $("memoryBox").innerHTML = `
+    <h3>记忆</h3>
+    <p style="color:var(--muted);margin:0">项目级长期记忆。对话里重要结论会沉淀到这里，也可在工作区 MEMORY.md 里改。</p>
+    <div class="kv"><span>原子记忆</span><b>${counts.atoms || 0}</b></div>
+    <div class="kv"><span>实体</span><b>${counts.entities || 0}</b></div>
+    <div class="kv"><span>事件</span><b>${counts.raw_events || 0}</b></div>
+    <h4>关于我</h4>${lines(about)}
+    <h4>当前焦点</h4>${lines(focus)}
+    <h4>你告诉过我的</h4>${lines(told)}
   `;
-  $("kbAdd").onclick = async () => {
-    try {
-      await api("/api/knowledge-bases", {
-        method: "POST",
-        body: JSON.stringify({ name: $("kbName").value.trim(), description: $("kbDesc").value.trim() }),
-      });
-      loadKnowledge();
-    } catch (err) { $("kbMsg").textContent = String(err.message || err); }
-  };
-  $("knowledgeBox").onclick = async (e) => {
-    const upload = e.target.dataset.upload;
-    const del = e.target.dataset.delkb;
-    try {
-      if (upload) {
-        const box = e.target.closest(".list-item");
-        const name = box.querySelector(`[data-title="${upload}"]`).value.trim() || "note.md";
-        const content = box.querySelector(`[data-content="${upload}"]`).value;
-        await api(`/api/knowledge-bases/${upload}/documents/text`, {
-          method: "POST",
-          body: JSON.stringify({ name, format: name.endsWith(".txt") ? "txt" : "md", content }),
-        });
-        $("kbMsg").textContent = "已写入";
-      }
-      if (del) {
-        await api(`/api/knowledge-bases/${del}`, { method: "DELETE" });
-        loadKnowledge();
-      }
-    } catch (err) { $("kbMsg").textContent = String(err.message || err); }
-  };
 }
 
 async function loadModelPage() {
