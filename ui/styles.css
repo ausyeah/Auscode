@@ -276,6 +276,11 @@ button.ghost {
   padding: 2px 8px; font-size: 12px; color: #35545a;
 }
 .muted { color: var(--muted); }
+.switch-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0; border-bottom: 1px dashed var(--line);
+}
+.switch-row small { margin-left: auto; color: var(--muted); }
 .usage-card .big { color: var(--ink-soft); }
 .price-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .price-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }

@@ -1044,17 +1044,89 @@ async function loadSkills() {
     loadSkills();
   };
 }
+function permModeFromPolicy(pol) {
+  if (pol.hitl && pol.hitl.enabled === false) return "full";
+  const tools = pol.hitl && pol.hitl.tools;
+  if (Array.isArray(tools) && tools.length && !tools.includes("write_file")) return "auto";
+  return "confirm";
+}
+
 async function loadSecurity() {
   const pol = await api("/api/admin/security");
   const tools = await api(`/api/agents/${state.agentId}/tool-settings`);
+  const mode = permModeFromPolicy(pol);
+  const guard = (pol.tool_guard && pol.tool_guard.mode) || "warn";
   $("securityBox").innerHTML = `
     <h3>权限与沙箱</h3>
-    <div class="kv"><span>HITL</span><b>${pol.hitl.enabled ? "开启确认" : "关闭"}</b></div>
-    <div class="kv"><span>文件系统</span><b>${pol.filesystem.enabled ? "限制中" : "未限制"}</b></div>
-    <div class="kv"><span>命令护栏</span><b>${pol.tool_guard.mode}</b></div>
+    <p class="muted">这些开关会立刻生效，和输入栏的权限档位是同一套设置。</p>
+    <div id="secMsg" class="muted"></div>
+    <h4>权限档位</h4>
+    <div class="seg" id="secModes">
+      <button data-mode="confirm" class="${mode === "confirm" ? "on" : ""}">变更前确认</button>
+      <button data-mode="auto" class="${mode === "auto" ? "on" : ""}">自动编辑</button>
+      <button data-mode="plan" class="${mode === "plan" ? "on" : ""}">计划模式</button>
+      <button data-mode="full" class="${mode === "full" ? "on" : ""}">完全访问</button>
+    </div>
+    <label class="switch-row"><input type="checkbox" id="secHitl" ${pol.hitl.enabled ? "checked" : ""}> 危险操作先问我</label>
+    <label class="switch-row"><input type="checkbox" id="secFs" ${pol.filesystem.enabled ? "checked" : ""}> 限制敏感目录</label>
+    <h4>命令护栏</h4>
+    <div class="seg" id="secGuard">
+      <button data-guard="off" class="${guard === "off" ? "on" : ""}">关闭</button>
+      <button data-guard="warn" class="${guard === "warn" ? "on" : ""}">警告</button>
+      <button data-guard="block" class="${guard === "block" ? "on" : ""}">拦截</button>
+    </div>
     <h4>工具开关</h4>
-    ${(tools.tools || []).map((t) => `<div class="kv"><span>${t.label}</span><b>${t.enabled ? "开" : "关"}</b></div>`).join("")}
+    ${(tools.tools || []).map((t) => `
+      <label class="switch-row">
+        <input type="checkbox" data-tool="${t.name}" data-source="${t.source}" data-plugin="${t.plugin_id || ""}" ${t.enabled ? "checked" : ""} ${t.disableable === false ? "disabled" : ""}>
+        <span>${t.label}</span>
+        <small>${t.disableable === false ? "必开" : (t.enabled ? "开" : "关")}</small>
+      </label>`).join("")}
   `;
+  const msg = $("secMsg");
+  $("secModes").onclick = async (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    try { await applyPerm(btn.dataset.mode); loadSecurity(); }
+    catch (err) { msg.textContent = String(err.message || err); }
+  };
+  $("secHitl").onchange = async (e) => {
+    try {
+      await api("/api/admin/security", { method: "PUT", body: JSON.stringify({ hitl: { enabled: e.target.checked } }) });
+      state.perm = e.target.checked ? "confirm" : "full";
+      localStorage.setItem("auscode.perm", state.perm);
+      setPermLabel();
+    } catch (err) { msg.textContent = String(err.message || err); e.target.checked = !e.target.checked; }
+  };
+  $("secFs").onchange = async (e) => {
+    try { await api("/api/admin/security", { method: "PUT", body: JSON.stringify({ filesystem: { enabled: e.target.checked } }) }); }
+    catch (err) { msg.textContent = String(err.message || err); e.target.checked = !e.target.checked; }
+  };
+  $("secGuard").onclick = async (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    try {
+      await api("/api/admin/security", { method: "PUT", body: JSON.stringify({ tool_guard: { enabled: btn.dataset.guard !== "off", mode: btn.dataset.guard } }) });
+      loadSecurity();
+    } catch (err) { msg.textContent = String(err.message || err); }
+  };
+  $("securityBox").onchange = async (e) => {
+    const box = e.target;
+    if (!box.dataset.tool) return;
+    try {
+      await api(`/api/agents/${state.agentId}/tool-settings/${encodeURIComponent(box.dataset.tool)}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          enabled: box.checked,
+          source: box.dataset.source || "builtin",
+          plugin_id: box.dataset.plugin || null,
+        }),
+      });
+    } catch (err) {
+      msg.textContent = String(err.message || err);
+      box.checked = !box.checked;
+    }
+  };
 }
 
 async function fetchRemoteModels() {
