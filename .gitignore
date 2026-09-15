@@ -1,0 +1,29 @@
+# runtime data (AUSCODE_HOME = this dir)
+config.json
+credential.txt
+*.db
+*.db-shm
+*.db-wal
+logs/
+plugins/
+browser-profiles/
+security/
+.salt
+*.log
+
+# heavy / machine-specific
+venv/**
+!venv/Lib
+!venv/Lib/site-packages
+!venv/Lib/site-packages/auscode
+!venv/Lib/site-packages/auscode-0.1.0.dist-info
+!venv/Lib/site-packages/auscode.pth
+snapshots/
+tools/__pycache__/
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

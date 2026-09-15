@@ -1,0 +1,1 @@
+"""auscode CLI package."""
