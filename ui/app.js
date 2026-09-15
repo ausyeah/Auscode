@@ -482,7 +482,6 @@ function hideSlash() {
 }
 
 async function ensureSlashCatalog() {
-  if (state.slashCatalog) return state.slashCatalog;
   const [cmds, skills] = await Promise.all([
     api("/api/slash/commands?origin=ui").catch(() => ({ commands: [] })),
     api(`/api/agents/${state.agentId}/skills`).catch(() => []),
@@ -503,6 +502,17 @@ function slashQuery() {
   return { at, q: text.slice(at + 1) };
 }
 
+function placeSlashMenu() {
+  const menu = $("slashMenu");
+  const box = $("prompt");
+  if (!menu || !box) return;
+  const rect = box.getBoundingClientRect();
+  menu.style.left = `${Math.max(16, rect.left)}px`;
+  menu.style.width = `${Math.max(240, rect.width)}px`;
+  menu.style.bottom = `${window.innerHeight - rect.top + 8}px`;
+  menu.style.top = "auto";
+}
+
 function renderSlash(items, index) {
   const menu = $("slashMenu");
   if (!items.length) { hideSlash(); return; }
@@ -512,6 +522,7 @@ function renderSlash(items, index) {
   menu.innerHTML = items.map((it, i) =>
     `<button type="button" data-i="${i}" class="${i === state.slashIndex ? "on" : ""}"><b>${it.label}</b><small>${it.hint || ""}</small></button>`
   ).join("");
+  placeSlashMenu();
 }
 
 async function updateSlash() {
@@ -519,12 +530,17 @@ async function updateSlash() {
   if (hit == null) { hideSlash(); return; }
   const cat = await ensureSlashCatalog();
   const q = hit.q.toLowerCase();
-  const skills = cat.skills.map((s) => ({
-    kind: "skill",
-    id: s.slug || s.name,
-    label: `/${s.slug || s.name}`,
-    hint: s.label?.zh || s.name || "",
-  }));
+  const skills = cat.skills.map((s) => {
+    const slug = s.slug || s.name || "";
+    const zh = (s.label && (s.label.zh || s.label)) || s.name || "";
+    return {
+      kind: "skill",
+      id: slug,
+      label: `/${slug}`,
+      hint: zh,
+      search: `${slug} ${zh} ${s.name || ""}`.toLowerCase(),
+    };
+  });
   const commands = cat.commands.map((c) => ({
     kind: "command",
     id: c.name,
@@ -532,9 +548,11 @@ async function updateSlash() {
     hint: c.label_zh || c.description_zh || "",
     action: c.client_action,
   }));
-  const items = [...skills, ...commands].filter((it) =>
-    !q || it.label.toLowerCase().includes(q) || (it.hint && it.hint.toLowerCase().includes(q))
-  ).slice(0, 12);
+  const items = [...skills, ...commands].filter((it) => {
+    if (!q) return true;
+    const hay = `${it.search || ""} ${it.label} ${it.hint || ""}`.toLowerCase();
+    return hay.includes(q);
+  }).slice(0, 12);
   renderSlash(items, 0);
 }
 
@@ -1150,7 +1168,7 @@ async function boot() {
   state.homeDir = sess.home_dir || "";
   state.projectDir = sess.project_dir || "D:/AusCode";
   setPermLabel();
-  await Promise.all([loadModels(), loadThreads(), refreshUsage()]);
+  await Promise.all([loadModels(), loadThreads(), refreshUsage(), ensureSlashCatalog().catch(() => {})]);
   const threads = await api(`/api/agents/${state.agentId}/threads`).catch(() => []);
   const saved = localStorage.getItem("auscode.thread");
   const pick = (threads || []).find((t) => t.thread_id === saved) || (threads || [])[0];

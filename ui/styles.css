@@ -181,10 +181,9 @@ textarea { width: 100%; min-height: 72px; resize: none; }
 .slash-wrap { position: relative; flex: 1; }
 .slash-wrap textarea { width: 100%; }
 .slash-menu {
-  position: absolute; left: 0; right: 72px; bottom: 100%;
-  margin-bottom: 6px; max-height: 240px; overflow: auto;
-  background: #fff; border: 1px solid var(--line); border-radius: 14px;
-  box-shadow: var(--shadow); z-index: 8;
+  position: fixed; width: min(420px, calc(100vw - 280px)); max-height: 280px;
+  overflow: auto; background: #fff; border: 1px solid var(--line);
+  border-radius: 14px; box-shadow: var(--shadow); z-index: 40;
 }
 .slash-menu button {
   display: block; width: 100%; text-align: left; border: 0; background: #fff;
