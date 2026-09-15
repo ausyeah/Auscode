@@ -959,9 +959,12 @@ async function boot() {
   state.projectDir = sess.project_dir || "D:/AusCode";
   setPermLabel();
   await Promise.all([loadModels(), loadThreads(), refreshUsage()]);
+  const threads = await api(`/api/agents/${state.agentId}/threads`).catch(() => []);
   const saved = localStorage.getItem("auscode.thread");
-  if (saved && (await api(`/api/agents/${state.agentId}/threads`)).some((t) => t.thread_id === saved)) {
-    await openThread(saved);
+  const pick = (threads || []).find((t) => t.thread_id === saved) || (threads || [])[0];
+  if (pick && pick.thread_id) {
+    try { await openThread(pick.thread_id); }
+    catch { localStorage.removeItem("auscode.thread"); }
   }
   connectWs();
 }
@@ -994,4 +997,7 @@ $("wsHome").onclick = () => applyWorkspace(state.homeDir).catch((err) => { $("ws
 $("wsProject").onclick = () => applyWorkspace(state.projectDir).catch((err) => { $("wsMsg").textContent = String(err.message || err); });
 $("wsApply").onclick = () => applyWorkspace($("wsCustom").value).catch((err) => { $("wsMsg").textContent = String(err.message || err); });
 
-boot().catch((err) => addBubble("think", "启动失败：" + err.message));
+boot().catch((err) => {
+  const box = $("messages");
+  if (box) box.innerHTML = `<div class="muted">启动失败：${err.message || err}</div>`;
+});

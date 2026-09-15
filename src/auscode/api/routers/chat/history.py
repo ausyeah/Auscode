@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -91,6 +92,59 @@ def _require_thread(
     return row
 
 
+def _titles_from_session_jsonl(workspace_root: Path) -> dict[str, str]:
+    titles: dict[str, str] = {}
+    sessions_dir = workspace_root / ".auscode" / "sessions"
+    if not sessions_dir.is_dir():
+        return titles
+    for path in sessions_dir.glob("*.jsonl"):
+        try:
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if '"role": "user"' not in line and '"role":"user"' not in line:
+                    continue
+                rec = json.loads(line)
+                tid = str(rec.get("thread_id") or "")
+                if tid and tid not in titles:
+                    content = rec.get("content") or ""
+                    if isinstance(content, list):
+                        content = " ".join(
+                            str(p.get("text") or "") for p in content if isinstance(p, dict)
+                        )
+                    text = " ".join(str(content).split())
+                    if text:
+                        titles[tid] = text[:40]
+        except (OSError, ValueError):
+            continue
+    return titles
+
+
+def _repair_missing_thread_rows(server: Any, *, agent_id: str, user_id: int) -> None:
+    """Reinsert thread metadata when sessions still point at missing thread rows."""
+    from auscode.infra.agents.workspace_dir import workspace_dir_from_config
+
+    sessions = server.services.session_repo.list_by_agent(agent_id, limit=200)
+    if not sessions:
+        return
+    cfg = server.app_runtime.agent_registry.get_config(agent_id)
+    workspace = workspace_dir_from_config(cfg, paths=server.paths, agent_id=agent_id)
+    titles = _titles_from_session_jsonl(workspace)
+    repo = server.services.thread_repo
+    for sess in sessions:
+        if sess.user_id != user_id or not sess.thread_id:
+            continue
+        if repo.get(sess.thread_id) is not None:
+            continue
+        repo.insert(
+            thread_id=sess.thread_id,
+            agent_id=agent_id,
+            user_id=user_id,
+            channel_type=sess.channel_type or "dashboard",
+            session_key=sess.session_key,
+            title=titles.get(sess.thread_id),
+            last_active=sess.updated_at or None,
+        )
+
+
 @router.get("/agents/{agent_id}/threads", summary="List threads")
 async def list_threads(
     agent_id: str,
@@ -103,6 +157,7 @@ async def list_threads(
     require_agent_row(agent_id, user=user, as_user=as_user, server=server)
     thread_registry = server.app_runtime.gateway.thread_registry
     effective_uid = as_user if as_user is not None else user.id
+    _repair_missing_thread_rows(server, agent_id=agent_id, user_id=effective_uid)
     rows = thread_registry.list_threads(agent_id=agent_id, user_id=effective_uid, limit=limit)
     bound = thread_registry.get_bound_thread_id(
         ThreadRegistry.dashboard_key(agent_id=agent_id, user_id=effective_uid)
