@@ -4,4 +4,4 @@ shell.CurrentDirectory = "D:\AusCode"
 shell.Environment("PROCESS")("AUSCODE_HOME") = "D:\AusCode\data"
 shell.Run "cmd /c ""D:\AusCode\venv\Scripts\python.exe"" -m auscode run --host 127.0.0.1 --port 8089", 0, False
 WScript.Sleep 3000
-shell.Run "http://127.0.0.1:8089/api/docs"
+shell.Run "cmd /c ""D:\AusCode\venv\Scripts\python.exe"" ""D:\AusCode\tools\desktop.py""", 0, False

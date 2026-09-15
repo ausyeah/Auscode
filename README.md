@@ -7,11 +7,14 @@ TencentCloud harness-agent（内核）深度定制换皮而来，详见 `THIRD-P
 ## 快速开始
 
 ```
-启动服务：双击 auscode-start.bat      （会打开接口说明书网页）
-跟 AI 对话：双击 auscode-chat.bat     （命令行聊天，这才是日常用法）
+打开桌面：双击 auscode-desktop.bat    （浅色图形界面，日常用法）
+启动服务：双击 auscode-start.bat
+命令行对话：双击 auscode-chat.bat
 停止服务：双击 auscode-stop.bat
 验收：双击 run-acceptance.bat
 ```
+
+图形界面是纸感浅色：左侧功能栏（对话 / 专家 / 自动化 / Token 统计 / 工作台 / 知识库 / 记忆 / 模型 / 插件 / 权限 / 设置），中间聊天。输入栏可切换模型、思考强度，以及权限档位（变更前确认 / 自动编辑 / 计划模式 / 完全访问）。设置页可额外接入 API Key。
 
 不要双击 `auscode-start.vbs`（旧脚本，中文编码会报错）。首页 `http://127.0.0.1:8089/` 会自动跳到说明书。
 
@@ -36,7 +39,9 @@ Authorization: Bearer <credential.txt 中的 Token>
 
 ## 怎么跟 AI 对话
 
-文档页（`/api/docs`）只是接口说明书，**不是聊天窗口**。日常用法是命令行：
+日常请双击 `auscode-desktop.bat`，打开图形窗口。文档页（`/api/docs`）只是接口说明书。
+
+也可以继续用命令行：
 
 1. 先双击 `auscode-start.bat` 把服务拉起来（已经在跑就跳过）
 2. 再双击 `auscode-chat.bat`

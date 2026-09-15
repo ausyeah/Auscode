@@ -81,6 +81,7 @@ _JWT_EXEMPT_EXACT = (
     "/api/auth/invite/redeem",
     "/api/docs",
     "/api/openapi.json",
+    "/api/ui/session",
 )
 
 

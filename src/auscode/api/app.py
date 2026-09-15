@@ -7,9 +7,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from scalar_fastapi import get_scalar_api_reference
 
 from auscode.api.middleware.jwt_auth import install as install_jwt_auth
@@ -88,9 +91,23 @@ def build_app(server: AusCodeServer) -> FastAPI:
     install_jwt_auth(app, server)
     install_setup_lockdown(app, server)
 
-    @app.get("/", include_in_schema=False)
-    async def root_redirect() -> RedirectResponse:
-        return RedirectResponse(url="/api/docs", status_code=307)
+    ui_dir = Path(__file__).resolve().parents[3] / "ui"
+    index_file = ui_dir / "index.html"
+    if index_file.is_file():
+        app.mount("/ui-assets", StaticFiles(directory=ui_dir), name="ui-assets")
+
+        @app.get("/", include_in_schema=False)
+        async def root_ui() -> FileResponse:
+            return FileResponse(index_file)
+
+        @app.get("/app", include_in_schema=False)
+        async def app_ui() -> FileResponse:
+            return FileResponse(index_file)
+    else:
+
+        @app.get("/", include_in_schema=False)
+        async def root_redirect() -> RedirectResponse:
+            return RedirectResponse(url="/api/docs", status_code=307)
 
     from auscode.infra.setup.tls.challenge import challenge_store
 
@@ -137,6 +154,7 @@ def build_app(server: AusCodeServer) -> FastAPI:
         slash,
         subagents,
         terminal,
+        ui_session,
         uploads,
         usage,
         users,
@@ -153,6 +171,7 @@ def build_app(server: AusCodeServer) -> FastAPI:
     _mount_routers(
         app,
         [
+            _RouterMount(ui_session.router, "/api", ["ui"]),
             _RouterMount(setup.router, "/api", ["setup"]),
             _RouterMount(auth.router, "/api/auth", ["auth"]),
             _RouterMount(preferences.router, "/api", ["auth"]),
