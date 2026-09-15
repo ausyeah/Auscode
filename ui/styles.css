@@ -133,6 +133,20 @@ body {
 }
 .bubble.assistant { background: #fff; border: 1px solid var(--line); }
 .work-status { color: var(--muted); font-size: 13px; padding: 2px 2px 8px; }
+.turn-trace { max-width: 92%; color: var(--muted); font-size: 13px; }
+.turn-trace.collapsed .trace-body { display: none; }
+.trace-head, .trace-summary {
+  border: 0; background: transparent; color: var(--muted); cursor: pointer;
+  font-family: var(--fang); font-size: 13px; padding: 4px 0; text-align: left;
+}
+.trace-head { display: flex; align-items: center; gap: 10px; width: 100%; }
+.trace-head::before, .trace-head::after {
+  content: ""; flex: 1; height: 1px; background: var(--line);
+}
+.trace-body { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 8px; }
+.trace-step { color: var(--muted); }
+.trace-step.live { color: #5d6b7a; }
+.trace-step.done { opacity: 0.72; }
 .think-block { max-width: 86%; color: var(--muted); font-size: 13px; }
 .think-head {
   border: 0; background: transparent; color: var(--muted); cursor: pointer;

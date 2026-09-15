@@ -183,61 +183,76 @@ async function forkFrom(wrap, content) {
 let thinkTimer = null;
 let thinkStartedAt = 0;
 let workStartedAt = 0;
+let traceCounts = { think: 0, tool: 0, read: 0, cmd: 0 };
 function secText(sec) {
   if (sec < 60) return `${sec}秒`;
   return `${Math.floor(sec / 60)}分${sec % 60}秒`;
 }
-function workEl() {
-  let el = document.querySelector(".work-status.live");
+function traceRoot() {
+  let el = document.querySelector(".turn-trace.live");
   if (!el) {
     el = document.createElement("div");
-    el.className = "work-status live";
+    el.className = "turn-trace live";
+    el.innerHTML = `<button type="button" class="trace-head">工作中 0秒</button><div class="trace-body"></div><button type="button" class="trace-summary hidden"></button>`;
+    el.querySelector(".trace-head").onclick = () => el.classList.toggle("collapsed");
+    el.querySelector(".trace-summary").onclick = () => el.classList.toggle("collapsed");
     $("messages").appendChild(el);
     workStartedAt = Date.now();
+    traceCounts = { think: 0, tool: 0, read: 0, cmd: 0 };
   }
   return el;
 }
 function tickTimers() {
-  const work = document.querySelector(".work-status.live");
-  if (work) work.textContent = `工作中 ${secText(Math.floor((Date.now() - workStartedAt) / 1000))}`;
-  const think = document.querySelector(".think-block.live");
-  if (think) {
-    const head = think.querySelector(".think-head");
-    const sec = Math.floor((Date.now() - thinkStartedAt) / 1000);
-    if (head) head.textContent = `思考 · ${secText(sec)}`;
-  }
+  const el = document.querySelector(".turn-trace.live");
+  if (!el) return;
+  const head = el.querySelector(".trace-head");
+  if (head) head.textContent = `工作中 ${secText(Math.floor((Date.now() - workStartedAt) / 1000))}`;
+  const think = el.querySelector(".think-block.live .think-head");
+  if (think) think.textContent = `思考 · ${secText(Math.floor((Date.now() - thinkStartedAt) / 1000))}`;
 }
 function ensureTimer() {
   if (!thinkTimer) thinkTimer = setInterval(tickTimers, 250);
 }
 function startWork() {
-  workEl();
+  const el = traceRoot();
+  el.classList.remove("collapsed");
   ensureTimer();
   tickTimers();
+  return el;
 }
 function stopWork() {
-  const el = document.querySelector(".work-status.live");
-  if (el) {
-    el.classList.remove("live");
-    el.textContent = `工作了 ${secText(Math.floor((Date.now() - workStartedAt) / 1000))}`;
-  }
-  if (thinkTimer && !document.querySelector(".think-block.live")) {
-    clearInterval(thinkTimer);
-    thinkTimer = null;
-  }
+  const el = document.querySelector(".turn-trace.live");
+  if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null; }
+  if (!el) return;
+  finishThinkStatus();
+  el.querySelectorAll(".tool-line.live").forEach((n) => n.classList.remove("live"));
+  el.classList.remove("live");
+  el.classList.add("collapsed");
+  const sec = Math.max(1, Math.floor((Date.now() - workStartedAt) / 1000));
+  const head = el.querySelector(".trace-head");
+  if (head) head.textContent = `用时 ${secText(sec)}`;
+  const parts = [];
+  if (traceCounts.think) parts.push(`${traceCounts.think} 次思考`);
+  if (traceCounts.tool) parts.push(`${traceCounts.tool} 次工具调用`);
+  if (traceCounts.read) parts.push(`${traceCounts.read} 次文件读取`);
+  if (traceCounts.cmd) parts.push(`${traceCounts.cmd} 次命令`);
+  const summary = el.querySelector(".trace-summary");
+  summary.textContent = parts.length ? `已执行：${parts.join(" · ")}` : "已执行";
+  summary.classList.remove("hidden");
 }
 function startThinkStatus() {
-  startWork();
-  let el = document.querySelector(".think-block.live");
+  const root = startWork();
+  let el = root.querySelector(".think-block.live");
   if (!el) {
+    root.querySelectorAll(".tool-line.live").forEach((n) => n.classList.remove("live"));
     el = document.createElement("div");
-    el.className = "think-block live open";
+    el.className = "think-block live open trace-step";
     el.innerHTML = `<button class="think-head" type="button">思考 · 0秒</button><div class="think-body"></div>`;
     el.querySelector(".think-head").onclick = () => el.classList.toggle("open");
-    $("messages").appendChild(el);
+    root.querySelector(".trace-body").appendChild(el);
     thinkStartedAt = Date.now();
+    traceCounts.think += 1;
   }
-  ensureTimer();
   tickTimers();
   $("messages").scrollTop = $("messages").scrollHeight;
   return el;
@@ -258,8 +273,8 @@ function finishThinkStatus() {
   el.classList.remove("live");
   el.classList.remove("open");
   if (!hasText) {
-    el.classList.add("empty");
     el.remove();
+    if (traceCounts.think > 0) traceCounts.think -= 1;
     return;
   }
   const sec = Math.max(1, Math.floor((Date.now() - thinkStartedAt) / 1000));
@@ -299,17 +314,26 @@ function toolSummary(name, args) {
   return clipText([cmd, shortPath(path), pattern].filter(Boolean).join(" ") || name, 56);
 }
 function upsertToolCard(id, name, status, args) {
-  startWork();
+  const root = startWork();
+  finishThinkStatus();
   const key = String(id || name);
-  let el = [...document.querySelectorAll(".tool-line")].find((n) => n.dataset.tool === key);
+  const body = root.querySelector(".trace-body");
+  let el = [...body.querySelectorAll(".tool-line")].find((n) => n.dataset.tool === key);
+  const verb = toolVerb(name);
   if (!el) {
+    body.querySelectorAll(".tool-line.live").forEach((n) => n.classList.remove("live"));
     el = document.createElement("div");
-    el.className = "tool-line";
+    el.className = "tool-line live trace-step";
     el.dataset.tool = key;
-    $("messages").appendChild(el);
+    body.appendChild(el);
+    if (verb === "读取" || verb === "查阅") traceCounts.read += 1;
+    else if (verb === "终端") traceCounts.cmd += 1;
+    else traceCounts.tool += 1;
   }
-  const extra = status === "等待确认" ? " · 待确认" : "";
-  el.innerHTML = `<b>${toolVerb(name)}</b> ${toolSummary(name, args)}${extra}`;
+  const extra = status === "等待确认" ? " · 待确认" : (status === "调用中" ? " · 进行中" : "");
+  el.classList.toggle("live", status === "调用中" || status === "等待确认");
+  el.classList.toggle("done", status === "完成");
+  el.innerHTML = `<b>${verb}</b> ${toolSummary(name, args)}${extra}`;
   $("messages").scrollTop = $("messages").scrollHeight;
 }
 function handleToolFrame(frame) {
