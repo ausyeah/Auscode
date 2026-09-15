@@ -82,6 +82,40 @@ function addBubble(role, text) {
   return el;
 }
 
+let thinkTimer = null;
+function formatThink(sec) {
+  if (sec < 60) return `思考中 ${sec}s`;
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `思考中 ${m}分${s}秒`;
+}
+function startThinkStatus() {
+  stopThinkStatus();
+  let el = document.querySelector(".bubble.think.live");
+  if (!el) {
+    el = document.createElement("div");
+    el.className = "bubble think live";
+    el.innerHTML = `<span class="think-dot"></span><span class="think-label">${formatThink(0)}</span>`;
+    $("messages").appendChild(el);
+  }
+  const t0 = Date.now();
+  thinkTimer = setInterval(() => {
+    const label = el.querySelector(".think-label");
+    if (label) label.textContent = formatThink(Math.floor((Date.now() - t0) / 1000));
+  }, 500);
+  $("messages").scrollTop = $("messages").scrollHeight;
+  return el;
+}
+function finishThinkStatus() {
+  const el = document.querySelector(".bubble.think.live");
+  if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null; }
+  if (!el) return;
+  const label = el.querySelector(".think-label");
+  const text = label ? label.textContent.replace("思考中", "已思考") : "已思考";
+  el.classList.remove("live");
+  el.innerHTML = text;
+}
+
 function setPermLabel() {
   $("permBtn").textContent = PERM[state.perm].label;
 }
@@ -101,19 +135,18 @@ function connectWs() {
   const ws = new WebSocket(`${proto}://${location.host}/api/agents/${state.agentId}/chat/ws?token=${encodeURIComponent(state.token)}`);
   state.ws = ws;
   let assistantEl = null;
-  let thinkEl = null;
   ws.onmessage = (ev) => {
     let frame;
     try { frame = JSON.parse(ev.data); } catch { return; }
     const t = frame.type;
     if (t === "reasoning") {
-      if (!thinkEl) thinkEl = addBubble("think", "");
-      thinkEl.textContent += frame.content || "";
+      startThinkStatus();
       return;
     }
     if (t === "token" || t === "text" || t === "delta") {
       const piece = frame.content || frame.text || frame.delta || "";
       if (!piece) return;
+            finishThinkStatus();
             if (!assistantEl) assistantEl = addBubble("assistant", "");
             assistantEl.textContent += extractText(piece) || String(piece);
       state.outTokens += 1;
@@ -130,9 +163,9 @@ function connectWs() {
       return;
     }
     if (t === "done" || t === "turn_end") {
+      finishThinkStatus();
       state.streaming = false;
       assistantEl = null;
-      thinkEl = null;
       if (frame.thread_id) state.threadId = frame.thread_id;
       refreshContext();
       refreshUsage();
@@ -144,6 +177,7 @@ function connectWs() {
       if (last && (last.type === "ai" || last.role === "assistant") && last.content) {
         const visible = extractText(last.content);
         if (visible) {
+          finishThinkStatus();
           if (!assistantEl) assistantEl = addBubble("assistant", "");
           assistantEl.textContent = visible;
         }
@@ -161,6 +195,7 @@ async function send() {
   state.streaming = true;
   state.startedAt = Date.now();
   state.outTokens = 0;
+  startThinkStatus();
   if (!state.ws || state.ws.readyState !== 1) connectWs();
   const waitOpen = () => new Promise((resolve) => {
     if (state.ws.readyState === 1) return resolve();

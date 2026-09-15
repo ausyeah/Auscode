@@ -9,14 +9,15 @@
   --ok: #3f6b4a;
   --shadow: 0 10px 30px rgba(43, 36, 28, 0.08);
   --radius: 18px;
-  --mono: "Cascadia Mono", "Consolas", monospace;
-  --sans: "Source Han Serif SC", "Noto Serif SC", "Songti SC", "Georgia", serif;
+  --fang: "FangSong", "仿宋", "STFangsong", "FangSong_GB2312", "KaiTi", serif;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; overflow: hidden; }
-body {
-  font-family: var(--sans);
+body, button, input, select, textarea {
+  font-family: var(--fang);
   color: var(--ink);
+}
+body {
   background:
     radial-gradient(1200px 600px at 10% -10%, #fffaf3 0%, transparent 55%),
     var(--bg);
@@ -30,7 +31,7 @@ body {
   min-height: 0;
 }
 .brand { display: flex; align-items: baseline; gap: 8px; padding: 0 8px 18px; }
-.brand b { font-size: 22px; letter-spacing: 0.04em; }
+.brand b { font-size: 22px; letter-spacing: 0.04em; font-weight: 700; }
 .brand span { color: var(--muted); font-size: 12px; }
 .nav { display: flex; flex-direction: column; gap: 4px; }
 .nav button {
@@ -51,7 +52,7 @@ body {
   padding: 16px 22px 8px;
 }
 .crumb { color: var(--muted); font-size: 13px; }
-.thread-title { font-size: 20px; margin-top: 2px; }
+.thread-title { font-size: 20px; margin-top: 2px; font-weight: 700; }
 .top-actions { display: flex; gap: 8px; }
 .page { display: none; min-height: 0; height: 100%; padding: 0 22px 16px; overflow: hidden; }
 .page.active { display: grid; }
@@ -67,7 +68,8 @@ body {
   padding: 12px 32px 12px 12px; border-radius: 12px; cursor: pointer; color: var(--ink);
 }
 .thread:hover, .thread.active { background: #f3eadc; }
-.thread small { display: block; color: var(--muted); margin-top: 4px; }
+.thread b { font-weight: 700; }
+.thread small { display: block; color: var(--muted); margin-top: 4px; font-weight: 400; }
 .thread .del {
   position: absolute; right: 8px; top: 10px;
   border: 0; background: transparent; color: var(--accent);
@@ -84,11 +86,20 @@ body {
 .bubble { max-width: 78%; padding: 12px 14px; border-radius: 16px; white-space: pre-wrap; line-height: 1.55; }
 .bubble.user { margin-left: auto; background: var(--accent); color: #fff; }
 .bubble.assistant { background: #fff; border: 1px solid var(--line); }
-.bubble.think { background: #f7f1e6; color: var(--muted); font-size: 13px; }
+.bubble.think {
+  background: transparent; border: 0; padding: 4px 2px;
+  color: var(--muted); font-size: 13px; max-width: 100%;
+}
+.think-dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); margin-right: 8px; animation: pulse 1s ease-in-out infinite;
+}
+@keyframes pulse { 50% { opacity: 0.25; } }
+.settings h3, .panel h3, .usage-card h4, .panel h4 { font-weight: 700; }
 .composer { padding: 12px; border-top: 1px solid var(--line); }
 .toolbar { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
 select, input, textarea, button.primary, button.ghost {
-  font: inherit;
+  font-family: var(--fang);
 }
 select, input, textarea {
   border: 1px solid var(--line); background: #fff; border-radius: 12px;
