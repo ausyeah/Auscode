@@ -710,11 +710,6 @@ async function refreshUsage() {
     acc += r.tokens / modelTotal;
     return `${MODEL_COLORS[i % MODEL_COLORS.length]} ${start}turn ${acc}turn`;
   }).join(", ");
-  const heat = buckets.map((b) => {
-    const ratio = Number(b.total_tokens || 0) / maxDay;
-    const alpha = 0.12 + ratio * 0.88;
-    return `<i title="${b.label} ${fmt(b.total_tokens)}" style="background:rgba(138,165,138,${alpha})"></i>`;
-  }).join("");
   const dayCols = buckets.slice(-14).map((b) => {
     const total = Number(b.total_tokens || 0) || 1;
     const h = Math.max(8, Math.round(Number(b.total_tokens || 0) * 128 / maxDay));
@@ -757,10 +752,6 @@ async function refreshUsage() {
       <div class="stat-card cache"><span>峰值（单日）</span><b>${fmt(peak)}</b></div>
       <div class="stat-card output"><span>调用 / 轮次</span><b>${u.model_calls} / ${u.turns}</b></div>
       <div class="stat-card think"><span>缓存命中</span><b>${hit}%</b></div>
-    </div>
-    <div class="hit-wrap">
-      <div class="kv" style="border:0;padding-top:0"><span>Token 活动</span><b>${buckets.length} 天</b></div>
-      <div class="heat">${heat || "<p>还没有用量</p>"}</div>
     </div>
     <div class="hit-wrap">
       <div class="kv" style="border:0;padding-top:0"><span>缓存 / 输入 / 输出</span><b>命中 ${hit}%</b></div>
