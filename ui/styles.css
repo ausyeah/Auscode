@@ -46,7 +46,12 @@ body {
 .usage-card h4 { margin: 0 0 8px; font-size: 13px; color: var(--muted); font-weight: 600; }
 .usage-card .big { font-size: 22px; }
 .usage-card p { margin: 4px 0; font-size: 12px; color: var(--muted); }
-.stage { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; overflow: hidden; }
+.stage {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0; min-height: 0; overflow: hidden;
+}
 .topbar {
   display: flex; justify-content: space-between; align-items: center;
   padding: 16px 22px 8px;
@@ -54,10 +59,24 @@ body {
 .crumb { color: var(--muted); font-size: 13px; }
 .thread-title { font-size: 20px; margin-top: 2px; font-weight: 700; }
 .top-actions { display: flex; gap: 8px; }
-.page { display: none; min-height: 0; height: 100%; padding: 0 22px 16px; overflow: hidden; }
-.page.active { display: grid; }
-.page.chat { grid-template-columns: 250px minmax(0, 1fr); gap: 16px; }
-.page:not(.chat).active { display: block; overflow: auto; }
+.page {
+  display: none;
+  grid-column: 1;
+  grid-row: 2;
+  min-height: 0;
+  height: 100%;
+  padding: 0 22px 16px;
+  overflow: hidden;
+}
+.page.active.chat {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 16px;
+}
+.page.active:not(.chat) {
+  display: block;
+  overflow: auto;
+}
 .card {
   background: var(--paper); border: 1px solid var(--line);
   border-radius: var(--radius); box-shadow: var(--shadow); min-height: 0;

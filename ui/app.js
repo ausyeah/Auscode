@@ -452,14 +452,21 @@ async function loadModels() {
 }
 
 function showPage(name) {
-  document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
+  document.querySelectorAll(".page").forEach((p) => {
+    p.classList.remove("active");
+    p.style.display = "";
+  });
   document.querySelectorAll(".nav button").forEach((b) => b.classList.toggle("active", b.dataset.page === name));
   const page = $("page-" + name);
+  if (!page) return;
   page.classList.add("active");
-  if (name !== "chat") page.style.display = "block";
-  else page.style.display = "grid";
   $("crumb").textContent = titles[name] || name;
-  $("pageTitle").textContent = titles[name] || name;
+  if (name === "chat") {
+    const title = document.querySelector(".thread.active b");
+    $("pageTitle").textContent = title ? title.textContent : "当前会话";
+  } else {
+    $("pageTitle").textContent = titles[name] || name;
+  }
   const loaders = {
     cron: loadCron, usage: refreshUsage, memory: loadMemory,
     models: loadModelPage, plugins: loadPlugins, security: loadSecurity,
