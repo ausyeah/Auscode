@@ -75,13 +75,106 @@ function extractText(content) {
   return "";
 }
 
-function addBubble(role, text) {
+function copyText(text) {
+  navigator.clipboard.writeText(text).catch(() => {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+  });
+}
+
+function addBubble(role, text, meta = {}) {
+  const wrap = document.createElement("div");
+  wrap.className = `bubble-wrap ${role}`;
   const el = document.createElement("div");
   el.className = `bubble ${role}`;
-  el.textContent = extractText(text) || (typeof text === "string" ? text : "");
-  $("messages").appendChild(el);
+  const visible = extractText(text) || (typeof text === "string" ? text : "");
+  el.textContent = visible;
+  wrap.appendChild(el);
+  const actions = document.createElement("div");
+  actions.className = "bubble-actions";
+  const copyBtn = document.createElement("button");
+  copyBtn.type = "button";
+  copyBtn.title = "复制";
+  copyBtn.textContent = "⧉";
+  copyBtn.onclick = () => copyText(el.textContent);
+  actions.appendChild(copyBtn);
+  if (role === "user") {
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.title = "编辑并重发";
+    editBtn.textContent = "✎";
+    editBtn.onclick = () => beginEdit(wrap, el);
+    actions.appendChild(editBtn);
+  }
+  if (role === "assistant") {
+    const forkBtn = document.createElement("button");
+    forkBtn.type = "button";
+    forkBtn.title = "分流到新对话";
+    forkBtn.textContent = "⑂";
+    forkBtn.onclick = () => forkFrom(wrap, el.textContent);
+    actions.appendChild(forkBtn);
+  }
+  wrap.dataset.msgId = meta.id || "";
+  wrap.dataset.role = role;
+  wrap.appendChild(actions);
+  $("messages").appendChild(wrap);
   $("messages").scrollTop = $("messages").scrollHeight;
   return el;
+}
+
+function beginEdit(wrap, el) {
+  if (wrap.querySelector(".bubble-edit")) return;
+  const ta = document.createElement("textarea");
+  ta.className = "bubble-edit";
+  ta.value = el.textContent;
+  const row = document.createElement("div");
+  row.className = "row";
+  const ok = document.createElement("button");
+  ok.className = "primary";
+  ok.textContent = "重发";
+  const cancel = document.createElement("button");
+  cancel.className = "ghost";
+  cancel.textContent = "取消";
+  ok.onclick = async () => {
+    const text = ta.value.trim();
+    if (!text) return;
+    while (wrap.nextSibling) wrap.nextSibling.remove();
+    el.textContent = text;
+    ta.remove();
+    row.remove();
+    await send(text, { fromEdit: true });
+  };
+  cancel.onclick = () => { ta.remove(); row.remove(); };
+  wrap.appendChild(ta);
+  row.appendChild(ok);
+  row.appendChild(cancel);
+  wrap.appendChild(row);
+  ta.focus();
+}
+
+async function forkFrom(wrap, content) {
+  if (!state.threadId) return;
+  const after = [];
+  let node = wrap.nextSibling;
+  while (node) {
+    if (node.classList && node.classList.contains("bubble-wrap") && node.dataset.role === "assistant") after.push(node);
+    node = node.nextSibling;
+  }
+  const fromEnd = after.length + 1;
+  const created = await api(`/api/agents/${state.agentId}/threads/${state.threadId}/fork`, {
+    method: "POST",
+    body: JSON.stringify({
+      message_id: wrap.dataset.msgId || null,
+      content,
+      assistant_turns_from_end: fromEnd,
+    }),
+  });
+  const nid = created.thread_id || created.id;
+  if (nid) await openThread(nid);
 }
 
 let thinkTimer = null;
@@ -245,7 +338,7 @@ function connectWs() {
       const piece = frame.content || frame.text || frame.delta || "";
       if (!piece) return;
             finishThinkStatus();
-            if (!assistantEl) assistantEl = addBubble("assistant", "");
+            if (!assistantEl) assistantEl = addBubble("assistant", "", { id: frame.message_id || "" });
             assistantEl.textContent += extractText(piece) || String(piece);
       state.outTokens += 1;
       const sec = Math.max(0.001, (Date.now() - state.startedAt) / 1000);
@@ -298,11 +391,11 @@ function connectWs() {
   };
 }
 
-async function send() {
-  const text = $("prompt").value.trim();
+async function send(preset, opts = {}) {
+  const text = (preset != null ? preset : $("prompt").value).trim();
   if (!text || state.streaming) return;
-  $("prompt").value = "";
-  addBubble("user", text);
+  if (preset == null) $("prompt").value = "";
+  if (!opts.fromEdit) addBubble("user", text);
   state.streaming = true;
   state.startedAt = Date.now();
   state.outTokens = 0;
@@ -382,8 +475,8 @@ async function openThread(id) {
       return;
     }
     if (!content) return;
-    if (role === "user" || role === "human") addBubble("user", content);
-    else if (role === "assistant" || role === "ai") addBubble("assistant", content);
+    if (role === "user" || role === "human") addBubble("user", content, { id: m.id });
+    else if (role === "assistant" || role === "ai") addBubble("assistant", content, { id: m.id });
   });
   const first = extractText(msgs[0] && msgs[0].content);
   $("pageTitle").textContent = (first || "当前会话").slice(0, 24);
