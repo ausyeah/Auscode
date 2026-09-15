@@ -142,6 +142,7 @@ body {
   display: none; margin: 6px 0 8px; padding: 10px 12px; border-radius: 12px;
   background: #eef3f7; color: #6a7380; font-size: 12px; line-height: 1.55;
   white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
+  max-height: 148px; overflow-y: auto; overflow-x: hidden;
 }
 .think-block.open .think-body, .think-block.live .think-body { display: block; }
 .think-block.live .think-head { color: #7a8fb0; }

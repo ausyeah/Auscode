@@ -242,7 +242,10 @@ function startThinkStatus() {
 function appendThink(text) {
   const el = startThinkStatus();
   const body = el.querySelector(".think-body");
-  if (body && text) body.textContent += text;
+  if (body && text) {
+    body.textContent += text;
+    body.scrollTop = body.scrollHeight;
+  }
 }
 function finishThinkStatus() {
   const el = document.querySelector(".think-block.live");
