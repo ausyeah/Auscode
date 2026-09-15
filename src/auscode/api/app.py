@@ -9,7 +9,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from scalar_fastapi import get_scalar_api_reference
 
 from auscode.api.middleware.jwt_auth import install as install_jwt_auth
@@ -87,6 +87,10 @@ def build_app(server: AusCodeServer) -> FastAPI:
 
     install_jwt_auth(app, server)
     install_setup_lockdown(app, server)
+
+    @app.get("/", include_in_schema=False)
+    async def root_redirect() -> RedirectResponse:
+        return RedirectResponse(url="/api/docs", status_code=307)
 
     from auscode.infra.setup.tls.challenge import challenge_store
 

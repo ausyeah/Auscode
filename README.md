@@ -7,9 +7,12 @@ TencentCloud harness-agent（内核）深度定制换皮而来，详见 `THIRD-P
 ## 快速开始
 
 ```
-启动：双击 auscode-start.vbs          （后台静默启动，监听 127.0.0.1:8089）
-停止：双击 auscode-stop.bat           （按端口结束进程）
+启动：双击 auscode-start.bat          （会打开接口说明书网页）
+停止：双击 auscode-stop.bat
+验收：双击 run-acceptance.bat
 ```
+
+不要双击 `auscode-start.vbs`（旧脚本，中文编码会报错）。首页 `http://127.0.0.1:8089/` 会自动跳到说明书。
 
 | 入口 | 地址 / 文件 |
 |---|---|
@@ -32,7 +35,7 @@ Authorization: Bearer <credential.txt 中的 Token>
 
 ## 怎么验收
 
-先保证服务在跑：双击 `auscode-start.vbs`，等几秒。然后分两层：
+先保证服务在跑：双击 `auscode-start.bat`，等几秒（会自动打开说明书网页）。然后分两层：
 
 ### 1. 一键机检（推荐先跑这个）
 
