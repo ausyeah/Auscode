@@ -164,6 +164,23 @@ select, input, textarea {
 }
 textarea { width: 100%; min-height: 72px; resize: none; }
 .row { display: flex; gap: 8px; align-items: flex-end; }
+.slash-wrap { position: relative; flex: 1; }
+.slash-wrap textarea { width: 100%; }
+.slash-menu {
+  position: absolute; left: 0; right: 72px; bottom: 100%;
+  margin-bottom: 6px; max-height: 240px; overflow: auto;
+  background: #fff; border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: var(--shadow); z-index: 8;
+}
+.slash-menu button {
+  display: block; width: 100%; text-align: left; border: 0; background: #fff;
+  padding: 8px 12px; cursor: pointer; font-family: var(--fang);
+}
+.slash-menu button:hover, .slash-menu button.on { background: var(--accent-soft); }
+.slash-menu small { display: block; color: var(--muted); }
+.slash-menu .slash-group {
+  padding: 6px 12px 2px; font-size: 12px; color: var(--muted); font-weight: 700;
+}
 button.primary {
   background: #c4a484; color: #3d3228; border: 0; border-radius: 999px;
   padding: 10px 16px; cursor: pointer; min-width: 72px;

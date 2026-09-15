@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AusCode</title>
-  <link rel="stylesheet" href="/ui-assets/styles.css?v=19" />
+  <link rel="stylesheet" href="/ui-assets/styles.css?v=21" />
 </head>
 <body>
   <div class="app">
@@ -70,8 +70,9 @@
                 </div>
               </div>
             </div>
-            <div class="row">
-              <textarea id="prompt" placeholder="和 AusCode 说点什么…"></textarea>
+            <div class="row slash-wrap">
+              <div id="slashMenu" class="slash-menu hidden"></div>
+              <textarea id="prompt" placeholder="输入 / 引用技能或命令"></textarea>
               <button class="primary" id="sendBtn">发送</button>
             </div>
           </div>
@@ -103,6 +104,6 @@
       </section>
     </main>
   </div>
-  <script src="/ui-assets/app.js?v=20"></script>
+  <script src="/ui-assets/app.js?v=21"></script>
 </body>
 </html>

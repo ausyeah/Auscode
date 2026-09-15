@@ -11,6 +11,9 @@ const state = {
   outTokens: 0,
   perm: localStorage.getItem("auscode.perm") || "full",
   selectedModels: [],
+  slashItems: [],
+  slashIndex: 0,
+  pendingSkills: [],
 };
 
 const PERM = {
@@ -441,7 +444,93 @@ async function send(preset, opts = {}) {
     reasoning_effort: effort,
   };
   if (state.perm === "plan") payload.skills = [];
+  else if (state.pendingSkills.length) payload.skills = [...state.pendingSkills];
+  state.pendingSkills = [];
+  hideSlash();
   state.ws.send(JSON.stringify(payload));
+}
+
+function hideSlash() {
+  const menu = $("slashMenu");
+  if (menu) { menu.classList.add("hidden"); menu.innerHTML = ""; }
+  state.slashItems = [];
+  state.slashIndex = 0;
+}
+
+async function ensureSlashCatalog() {
+  if (state.slashCatalog) return state.slashCatalog;
+  const [cmds, skills] = await Promise.all([
+    api("/api/slash/commands?origin=ui").catch(() => ({ commands: [] })),
+    api(`/api/agents/${state.agentId}/skills`).catch(() => []),
+  ]);
+  const skillRows = Array.isArray(skills) ? skills : (skills.items || []);
+  state.slashCatalog = {
+    commands: cmds.commands || [],
+    skills: skillRows.filter((s) => s.enabled !== false),
+  };
+  return state.slashCatalog;
+}
+
+function slashQuery() {
+  const text = $("prompt").value;
+  const at = text.lastIndexOf("/");
+  if (at < 0) return null;
+  if (at > 0 && !/\s/.test(text[at - 1])) return null;
+  return { at, q: text.slice(at + 1) };
+}
+
+function renderSlash(items, index) {
+  const menu = $("slashMenu");
+  if (!items.length) { hideSlash(); return; }
+  state.slashItems = items;
+  state.slashIndex = Math.max(0, Math.min(index, items.length - 1));
+  menu.classList.remove("hidden");
+  menu.innerHTML = items.map((it, i) =>
+    `<button type="button" data-i="${i}" class="${i === state.slashIndex ? "on" : ""}"><b>${it.label}</b><small>${it.hint || ""}</small></button>`
+  ).join("");
+}
+
+async function updateSlash() {
+  const hit = slashQuery();
+  if (hit == null) { hideSlash(); return; }
+  const cat = await ensureSlashCatalog();
+  const q = hit.q.toLowerCase();
+  const skills = cat.skills.map((s) => ({
+    kind: "skill",
+    id: s.slug || s.name,
+    label: `/${s.slug || s.name}`,
+    hint: s.label?.zh || s.name || "",
+  }));
+  const commands = cat.commands.map((c) => ({
+    kind: "command",
+    id: c.name,
+    label: c.command || `/${c.name}`,
+    hint: c.label_zh || c.description_zh || "",
+    action: c.client_action,
+  }));
+  const items = [...skills, ...commands].filter((it) =>
+    !q || it.label.toLowerCase().includes(q) || (it.hint && it.hint.toLowerCase().includes(q))
+  ).slice(0, 12);
+  renderSlash(items, 0);
+}
+
+function applySlash(item) {
+  const hit = slashQuery();
+  const box = $("prompt");
+  const before = hit ? box.value.slice(0, hit.at) : box.value;
+  if (item.kind === "skill") {
+    state.pendingSkills = [item.id];
+    box.value = `${before}/${item.id} `;
+  } else if (item.action === "new_chat") {
+    hideSlash();
+    newThread();
+    box.value = before;
+    return;
+  } else {
+    box.value = `${before}${item.label} `;
+  }
+  hideSlash();
+  box.focus();
 }
 
 async function loadThreads() {
@@ -1054,8 +1143,31 @@ $("nav").onclick = (e) => {
 };
 $("sendBtn").onclick = send;
 $("prompt").addEventListener("keydown", (e) => {
+  const menuOpen = state.slashItems.length && !$("slashMenu").classList.contains("hidden");
+  if (menuOpen && e.key === "ArrowDown") {
+    e.preventDefault();
+    renderSlash(state.slashItems, state.slashIndex + 1);
+    return;
+  }
+  if (menuOpen && e.key === "ArrowUp") {
+    e.preventDefault();
+    renderSlash(state.slashItems, state.slashIndex - 1);
+    return;
+  }
+  if (menuOpen && (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey))) {
+    e.preventDefault();
+    applySlash(state.slashItems[state.slashIndex]);
+    return;
+  }
+  if (e.key === "Escape") hideSlash();
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
 });
+$("prompt").addEventListener("input", () => { updateSlash().catch(() => {}); });
+$("slashMenu").onclick = (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  applySlash(state.slashItems[Number(btn.dataset.i)]);
+};
 $("btnNew").onclick = newThread;
 $("btnDocs").onclick = () => window.open("/api/docs", "_blank");
 $("permBtn").onclick = () => $("permMenu").classList.toggle("open");
