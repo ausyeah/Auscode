@@ -76,6 +76,8 @@ class AgentPatchBody(AgentRuntimeFields):
     skill_package_ids: list[str] | None = None
     knowledge_base_ids: list[str] | None = None
     mcp_servers: list[str] | None = None
+    reasoning_mode: Literal["auto", "enabled", "disabled"] | None = None
+    reasoning_effort: str | None = None
 
 
 def _attach_unread_counts(
@@ -168,6 +170,8 @@ def _row_dict(
         "mcp_servers": id_list_from_row(row, "mcp_servers"),
         "published_expert_id": row.published_expert_id,
         "welcome_message": welcome_from_row(row),
+        "reasoning_mode": cfg.get("reasoning_mode"),
+        "reasoning_effort": cfg.get("reasoning_effort"),
         "is_shared": bool(int(getattr(row, "is_shared", 0) or 0)),
         "is_owner": row.user_id is not None and row.user_id == viewer_user_id,
         "owner_username": owner_username,
@@ -373,10 +377,28 @@ async def patch_agent(
             "skill_package_ids",
             "knowledge_base_ids",
             "mcp_servers",
+            "reasoning_mode",
+            "reasoning_effort",
         }
     }
-    if body.config is not None:
-        updates["config_json"] = json.dumps(body.config)
+    if body.config is not None or body.reasoning_mode is not None or body.reasoning_effort is not None:
+        cfg = parse_config_json(row.config_json)
+        if body.config is not None and isinstance(body.config, dict):
+            cfg.update(body.config)
+        if body.reasoning_mode is not None:
+            cfg["reasoning_mode"] = body.reasoning_mode
+        if body.reasoning_effort is not None:
+            effort = body.reasoning_effort.strip().lower()
+            allowed = {"low", "medium", "high", "xhigh"}
+            if effort not in allowed:
+                raise AusCodeError(
+                    ErrorCode.SLASH_BAD_ARGS,
+                    "reasoning_effort must be low, medium, high, or xhigh",
+                )
+            cfg["reasoning_effort"] = effort
+            if body.reasoning_mode is None:
+                cfg["reasoning_mode"] = "disabled" if effort == "low" else "enabled"
+        updates["config_json"] = json.dumps(cfg)
     if body.welcome_message is not None:
         updates["welcome_message"] = body.welcome_message
     if updates:

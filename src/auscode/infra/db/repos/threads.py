@@ -289,6 +289,24 @@ class ThreadRepo:
                 (now_ts(), thread_id),
             )
 
+    def restore_activity(
+        self,
+        thread_id: str,
+        *,
+        title: str | None,
+        last_active: int,
+    ) -> None:
+        """Fill in title/last_active for recovered transcripts without clobbering live rows."""
+        clipped = clip_thread_title(title) if title else None
+        with self._db.transaction() as conn:
+            conn.execute(
+                "UPDATE threads SET "
+                "title = CASE WHEN title IS NULL OR title = '' THEN COALESCE(?, title) ELSE title END, "
+                "last_active = CASE WHEN last_active = 0 THEN ? ELSE last_active END "
+                "WHERE thread_id = ?",
+                (clipped, int(last_active or 0), thread_id),
+            )
+
     def append_artifacts(self, thread_id: str, paths: Sequence[str]) -> None:
         incoming = [p.strip() for p in paths if isinstance(p, str) and p.strip()]
         if not incoming:

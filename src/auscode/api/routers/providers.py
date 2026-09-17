@@ -17,6 +17,7 @@ from auscode.infra.agents.providers.presets import load_provider_presets
 from auscode.infra.agents.providers.probe import (
     fetch_openai_compatible_models,
     make_probe_provider_row,
+    measure_openai_ttft,
     probe_provider_row,
     provider_headers,
 )
@@ -92,6 +93,15 @@ class ProviderTestDraftBody(BaseModel):
 
 class ProviderFetchModelsBody(BaseModel):
     kind: str
+    api_key: str | None = None
+    base_url: str | None = None
+    extra_json: str | None = None
+
+
+class ProviderTtftBody(BaseModel):
+    provider_id: int | None = None
+    model_id: str
+    kind: str | None = None
     api_key: str | None = None
     base_url: str | None = None
     extra_json: str | None = None
@@ -344,6 +354,42 @@ async def admin_fetch_provider_models(
     return await fetch_openai_compatible_models(
         base_url=(body.base_url or "").strip() or None,
         api_key=api_key,
+        extra_headers=provider_headers(draft) or None,
+        locale=resolve_request_locale(request),
+    )
+
+
+@admin_router.post("/ttft", summary="Measure time to first token for one model")
+async def admin_measure_ttft(
+    body: ProviderTtftBody,
+    request: Request,
+    _: Any = Depends(require_permission("providers")),
+    server: Any = Depends(get_server),
+) -> dict[str, Any]:
+    model_id = (body.model_id or "").strip()
+    if not model_id:
+        return {"ok": False, "error": "model_id is required"}
+    kind = (body.kind or "openai").strip() or "openai"
+    api_key = (body.api_key or "").strip()
+    base_url = (body.base_url or "").strip() or None
+    extra_json = body.extra_json
+    if body.provider_id is not None:
+        row = server.services.provider_repo.get(body.provider_id)
+        if row is None:
+            return {"ok": False, "error": "provider not found"}
+        kind = row.kind or kind
+        api_key = api_key or (row.api_key or "")
+        base_url = base_url or row.base_url
+        extra_json = extra_json or row.extra_json
+    if kind != "openai":
+        return {"ok": False, "error": "ttft is only supported for openai-compatible providers"}
+    if not api_key:
+        return {"ok": False, "error": "api_key is required"}
+    draft = SimpleNamespace(extra_json=extra_json)
+    return await measure_openai_ttft(
+        base_url=base_url,
+        api_key=api_key,
+        model_id=model_id,
         extra_headers=provider_headers(draft) or None,
         locale=resolve_request_locale(request),
     )

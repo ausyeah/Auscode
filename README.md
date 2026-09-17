@@ -1,6 +1,6 @@
 # AusCode
 
-自托管单用户 AI 助手 **纯后端 API 服务**。基于 MIT 协议的开源项目 Octop（壳层）与
+自托管单用户 AI 助手 **本地 Web 应用**。基于 MIT 协议的开源项目 Octop（壳层）与
 TencentCloud harness-agent（内核）深度定制换皮而来，详见 `THIRD-PARTY-NOTICES` 与
 `docs/PLAN.md`。
 
@@ -14,12 +14,16 @@ TencentCloud harness-agent（内核）深度定制换皮而来，详见 `THIRD-P
 验收：双击 run-acceptance.bat
 ```
 
-图形界面是纸感浅色：左侧功能栏（对话 / 自动化 / Token 统计 / 记忆 / 模型 / 插件 / 权限 / 设置），中间聊天。输入栏可切换模型、思考强度，以及权限档位（变更前确认 / 自动编辑 / 计划模式 / 完全访问）。设置页可额外接入 API Key。历史对话悬停显示删除。整页不滚动，只有对话区自己滑。
+图形界面是纸感浅色：左侧功能栏（对话 / 自动化 / Token 统计 / 记忆 / 模型 / 技能 / 插件 / 权限 / 设置），中间聊天。输入栏可切换模型、思考强度，以及权限档位（变更前确认 / 自动编辑 / 计划模式 / 完全访问）。设置页可额外接入 API Key。历史对话悬停显示删除。整页不滚动，只有对话区自己滑。
 
-不要双击 `auscode-start.vbs`（旧脚本，中文编码会报错）。首页 `http://127.0.0.1:8089/` 会自动跳到说明书。
+聊天消息渲染 Markdown（标题 / 列表 / 表格 / 代码），并内置 KaTeX 渲染 LaTeX 公式：
+行内 `$E=mc^2$` 或 `\(a+b\)`，块级 `$$...$$` 或 `\[...\]`。公式资源本地打包（`ui/vendor/katex/`），离线可用。
+
+不要双击 `auscode-start.vbs`（旧脚本，留着仅作参考，请用 `auscode-start.bat`）。
 
 | 入口 | 地址 / 文件 |
 |---|---|
+| 图形界面 | http://127.0.0.1:8089/ （服务启动后自动打开） |
 | 接口说明书（Scalar） | http://127.0.0.1:8089/api/docs |
 | OpenAPI 规范 | http://127.0.0.1:8089/api/openapi.json |
 | 健康检查 | http://127.0.0.1:8089/api/health |
@@ -39,7 +43,7 @@ Authorization: Bearer <credential.txt 中的 Token>
 
 ## 怎么跟 AI 对话
 
-日常请双击 `auscode-desktop.bat`，打开图形窗口。文档页（`/api/docs`）只是接口说明书。
+日常请双击 `auscode-desktop.bat`，打开图形窗口。
 
 也可以继续用命令行：
 
@@ -62,17 +66,15 @@ venv\Scripts\python.exe -m auscode chats send --agent TV3AHW "你好，介绍一
 venv\Scripts\python.exe -m auscode chats send --agent TV3AHW --model glm-5.3-flash "你好"
 ```
 
-没有网页聊天界面是当时按「只要后端 API」裁掉的。如果后面要网页对话框，可以再加一层套皮前端。
-
 ## 怎么验收
 
-先保证服务在跑：双击 `auscode-start.bat`，等几秒（会自动打开说明书网页）。然后分两层：
+先保证服务在跑：双击 `auscode-start.bat`，等几秒（会自动打开图形界面）。然后分两层：
 
 ### 1. 一键机检（推荐先跑这个）
 
-双击 `D:\AusCode\run-acceptance.bat`。会自动检查健康、鉴权、已删功能 404、插件/知识库/浏览器/cron/记忆接口。刚才实测 **17/17 通过**。
+双击 `D:\AusCode\run-acceptance.bat`。会自动检查健康、鉴权、已删功能 404、插件/知识库/浏览器/cron/记忆接口。
 
-### 2. 在接口说明书里手动试（你现在打开的页面）
+### 2. 在接口说明书里手动试
 
 打开 [http://127.0.0.1:8089/api/docs](http://127.0.0.1:8089/api/docs)。页面顶部找到 **Auth**（或锁形图标），选 Bearer，把 `data\credential.txt` 里那串以 `eyJ` 开头的 Token 贴进去。之后每个接口右侧的 **Try it** 都会自动带上 Token。
 
@@ -108,9 +110,10 @@ venv\Scripts\python.exe -m auscode chats send --agent TV3AHW --model glm-5.3-fla
 D:\AusCode\
 ├── auscode-start.vbs / auscode-stop.bat   启停脚本
 ├── src\auscode\               源码（Python 包，git 管理）
+├── ui\                        Web 界面（自建轻量前端 + vendor\katex 本地公式库）
 ├── venv\                      Python 3.12 运行环境（本机复制，勿移动）
 ├── data\                      运行数据（AUSCODE_HOME，已 gitignore）
-├── tools\                     bootstrap_token.py / 改名脚本（历史工具）
+├── tools\                     bootstrap_token.py / desktop.py / acceptance.py
 ├── snapshots\                 改造前源码快照 zip（gitignore）
 ├── THIRD-PARTY-NOTICES        第三方许可声明（MIT 合规，勿删）
 └── docs\PLAN.md               项目方案与决策记录
@@ -119,9 +122,9 @@ D:\AusCode\
 ## 保留 / 已移除
 
 保留：对话（REST+WS 流式）、知识库 RAG、插件系统、浏览器自动化、长期记忆、cron 定时任务、
-MCP 连接器（connectors）、专家/子代理、文件系统与终端工具。
+MCP 连接器（connectors）、专家/子代理、文件系统与终端工具、自建 Web 界面（`ui\`，非 Octop 编译版 dashboard）。
 
-物理移除：Web dashboard、IM 渠道（飞书/钉钉/元宝）、手机遥控、桌面控制、语音 TTS、
+物理移除：Octop 编译版 dashboard、IM 渠道（飞书/钉钉/元宝）、手机遥控、桌面控制、语音 TTS、
 邀请码/OIDC 登录、`update` 自更新命令与路由。相关接口返回 404。
 
 一期停用（代码仍在，二期评估）：TLS/ACME、backup、proactive 主动关怀。

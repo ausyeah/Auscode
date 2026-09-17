@@ -31,6 +31,7 @@ from auscode.infra.gateway.process.message_keys import (
 )
 from auscode.infra.gateway.process.usage_record import extract_usage_from_chunk
 from auscode.infra.gateway.threads import ThreadRegistry
+from auscode.infra.agents.memory_gate import attach_memory_if_needed
 from auscode.infra.gateway.ws import WS_CHANNEL_ID
 
 __all__ = [
@@ -290,6 +291,17 @@ async def prepare_dashboard_turn(
         default_model=default_model,
     )
     inbound_content = content_parts_from_dashboard_turn(turn)
+    workspace_dir = None
+    try:
+        workspace_dir = server.app_runtime.agent_registry.resolve_workspace_dir(agent_id)
+    except Exception:
+        workspace_dir = None
+    if inbound_content:
+        first = inbound_content[0]
+        if isinstance(first, TextContent) and first.text:
+            gated = attach_memory_if_needed(first.text, workspace_dir)
+            if gated != first.text:
+                inbound_content[0] = TextContent(text=gated)
     inbound_attachments = inbound_attachments_from_parts(inbound_content)
     return PreparedDashboardTurn(
         thread_id=thread_id,

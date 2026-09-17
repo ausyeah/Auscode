@@ -667,27 +667,40 @@ def _merge_adjacent_messages(messages: list[dict[str, Any]]) -> list[dict[str, A
     return merged
 
 
+def _session_jsonl_rel_dirs() -> tuple[str, ...]:
+    return ("sessions", ".auscode/sessions")
+
+
 def _collect_jsonl_from_workspace_backend(workspace: Any) -> list[tuple[str, str]]:
     sources: list[tuple[str, str]] = []
-    entries = workspace.list_dir("sessions")
-    if not entries:
-        return sources
-    for entry in entries:
-        if isinstance(entry, dict):
-            path = entry.get("path")
-            is_dir = entry.get("is_dir")
-        else:
-            path = getattr(entry, "path", None)
-            is_dir = getattr(entry, "is_dir", False)
-        if not path or is_dir:
+    seen: set[str] = set()
+    for rel_dir in _session_jsonl_rel_dirs():
+        try:
+            entries = workspace.list_dir(rel_dir)
+        except Exception:
             continue
-        rel = str(path).replace("\\", "/")
-        if not rel.endswith(".jsonl"):
+        if not entries:
             continue
-        workspace_path = rel if rel.startswith("sessions/") else f"sessions/{Path(rel).name}"
-        text = workspace.read_text(workspace_path)
-        if text:
-            sources.append((Path(rel).name, text))
+        for entry in entries:
+            if isinstance(entry, dict):
+                path = entry.get("path")
+                is_dir = entry.get("is_dir")
+            else:
+                path = getattr(entry, "path", None)
+                is_dir = getattr(entry, "is_dir", False)
+            if not path or is_dir:
+                continue
+            rel = str(path).replace("\\", "/")
+            if not rel.endswith(".jsonl"):
+                continue
+            name = Path(rel).name
+            if name in seen:
+                continue
+            workspace_path = rel if rel.startswith(rel_dir) else f"{rel_dir}/{name}"
+            text = workspace.read_text(workspace_path)
+            if text:
+                seen.add(name)
+                sources.append((name, text))
     sources.sort(key=lambda item: item[0], reverse=True)
     return sources
 
@@ -714,12 +727,18 @@ async def _iter_session_jsonl_sources(
             )
 
     sources: list[tuple[str, str]] = []
+    seen: set[str] = set()
     local_workspace = resolve_agent_workspace_dir(server, agent_id)
-    sessions_dir = Path(local_workspace) / "sessions"
-    if sessions_dir.is_dir():
+    for rel_dir in _session_jsonl_rel_dirs():
+        sessions_dir = Path(local_workspace) / Path(*rel_dir.split("/"))
+        if not sessions_dir.is_dir():
+            continue
         for path in sorted(sessions_dir.glob("*.jsonl"), reverse=True):
+            if path.name in seen:
+                continue
             try:
                 sources.append((path.name, path.read_text(encoding="utf-8")))
+                seen.add(path.name)
             except OSError:
                 logger.warning("failed to read session log %s", path, exc_info=True)
 

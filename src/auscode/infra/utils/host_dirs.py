@@ -314,6 +314,23 @@ def rename_host_dir(
     return {"path": host_path_text(target), "name": name}
 
 
+def reveal_host_dir(path: str, *, restrict_to_root: str | None = None) -> str:
+    """Open a validated local directory in the OS file manager."""
+    import subprocess
+
+    resolved = assert_safe_host_path(path, restrict_to_home=False, restrict_to_root=restrict_to_root)
+    if not resolved.is_dir():
+        raise ValueError("not a directory")
+    target = os.fspath(resolved)
+    if os.name == "nt":
+        subprocess.Popen(["explorer.exe", target], close_fds=True, shell=False)
+    elif Path("/usr/bin/open").exists():
+        subprocess.Popen(["/usr/bin/open", target], close_fds=True, shell=False)
+    else:
+        subprocess.Popen(["xdg-open", target], close_fds=True, shell=False)
+    return host_path_text(resolved)
+
+
 def iter_local_backend_root_dirs(spec: Any) -> list[str]:
     """Collect ``root_dir`` values from local_shell / filesystem backend specs."""
     if not isinstance(spec, dict):

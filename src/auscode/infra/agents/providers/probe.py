@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 _DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 _FETCH_MODELS_TIMEOUT_S = 30.0
 _EMBEDDING_PROBE_TEXT = "ping"
+_TTFT_TIMEOUT_S = 12.0
+_TTFT_PROMPT = "回复一个字：好"
 
 
 def provider_headers(row: Any) -> dict[str, str]:
@@ -294,7 +296,7 @@ async def fetch_openai_compatible_models(
             "error": "response is not OpenAI-compatible (expected {data: [{id, …}]})",
         }
 
-    models: list[dict[str, str]] = []
+    models: list[dict[str, Any]] = []
     seen: set[str] = set()
     for item in data:
         if not isinstance(item, dict):
@@ -306,6 +308,107 @@ async def fetch_openai_compatible_models(
         if mid in seen:
             continue
         seen.add(mid)
-        models.append({"id": mid, "name": mid})
+        window = None
+        for key in (
+            "context_length",
+            "max_model_len",
+            "context_window",
+            "max_context_tokens",
+            "input_token_limit",
+            "max_input_tokens",
+        ):
+            value = item.get(key)
+            if isinstance(value, int) and value > 0:
+                window = value
+                break
+        name = item.get("display_name") or item.get("name") or mid
+        entry: dict[str, Any] = {"id": mid, "name": str(name)}
+        if window:
+            entry["context_window"] = window
+            entry["max_input_tokens"] = window
+        models.append(entry)
     models.sort(key=lambda m: m["id"])
     return {"ok": True, "models": models}
+
+
+def _chat_completions_url(base_url: str | None) -> str:
+    root = (base_url or "").strip().rstrip("/") or _DEFAULT_OPENAI_BASE_URL
+    if root.endswith("/v1"):
+        return f"{root}/chat/completions"
+    return f"{root}/v1/chat/completions"
+
+
+def _ttft_text_from_sse_line(line: str) -> str:
+    raw = line.strip()
+    if not raw.startswith("data:"):
+        return ""
+    payload = raw[5:].strip()
+    if not payload or payload == "[DONE]":
+        return ""
+    try:
+        body = json.loads(payload)
+    except json.JSONDecodeError:
+        return ""
+    choices = body.get("choices") if isinstance(body, dict) else None
+    if not isinstance(choices, list) or not choices:
+        return ""
+    first = choices[0] if isinstance(choices[0], dict) else {}
+    delta = first.get("delta") if isinstance(first.get("delta"), dict) else {}
+    for key in ("content", "reasoning_content", "reasoning"):
+        value = delta.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    message = first.get("message") if isinstance(first.get("message"), dict) else {}
+    value = message.get("content")
+    if isinstance(value, str) and value.strip():
+        return value
+    return ""
+
+
+async def measure_openai_ttft(
+    *,
+    base_url: str | None,
+    api_key: str,
+    model_id: str,
+    extra_headers: dict[str, str] | None = None,
+    locale: str = "en",
+) -> dict[str, Any]:
+    """Stream a tiny completion and time until the first non-empty text."""
+    url = _chat_completions_url(base_url)
+    headers: dict[str, str] = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    extra_headers = ensure_opencode_session_header(base_url, extra_headers)
+    if extra_headers:
+        headers.update(extra_headers)
+    payload = {
+        "model": model_id,
+        "stream": True,
+        "max_tokens": 8,
+        "messages": [{"role": "user", "content": _TTFT_PROMPT}],
+    }
+    started = time.perf_counter()
+    try:
+        async with httpx.AsyncClient(timeout=_TTFT_TIMEOUT_S) as client:
+            async with client.stream("POST", url, headers=headers, json=payload) as response:
+                if response.status_code >= 400:
+                    detail = (await response.aread()).decode("utf-8", "replace").strip()
+                    if len(detail) > 300:
+                        detail = detail[:300] + "…"
+                    return {
+                        "ok": False,
+                        "error": _friendly_probe_error(
+                            f"HTTP {response.status_code}: {detail}" if detail else f"HTTP {response.status_code}",
+                            locale=locale,
+                        ),
+                    }
+                async for line in response.aiter_lines():
+                    text = _ttft_text_from_sse_line(line)
+                    if text:
+                        ms = int((time.perf_counter() - started) * 1000)
+                        return {"ok": True, "ttft_ms": ms, "preview": text[:24]}
+    except Exception as exc:
+        logger.info("ttft probe failed for %s %s: %s", url, model_id, exc)
+        return {"ok": False, "error": _friendly_probe_error(exc, locale=locale)}
+    return {"ok": False, "error": "no_content"}

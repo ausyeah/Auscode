@@ -177,6 +177,14 @@ class SessionRepo:
                 (thread_id, now_ts(), session_key),
             )
 
+    def clear_thread(self, thread_id: str) -> None:
+        """Detach sessions still pointing at a deleted thread so list repair cannot revive it."""
+        with self._db.transaction() as conn:
+            conn.execute(
+                "UPDATE sessions SET thread_id = '', updated_at = ? WHERE thread_id = ?",
+                (now_ts(), thread_id),
+            )
+
     def set_agent_id(self, session_key: str, agent_id: str) -> None:
         with self._db.transaction() as conn:
             conn.execute(

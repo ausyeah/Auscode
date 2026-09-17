@@ -405,6 +405,7 @@ class ThreadRegistry:
         )
 
     def delete_thread(self, thread_id: str) -> None:
+        self._sessions.clear_thread(thread_id)
         self._threads.delete(thread_id)
 
     def increment_unread(self, session_key: str, *, delta: int = 1) -> None:

@@ -35,7 +35,7 @@ class WebSocketHub:
     def __init__(self) -> None:
         self._connections: dict[str, SendFn] = {}
         self._thread_subscribers: dict[str, set[str]] = {}
-        self._conn_thread: dict[str, str] = {}
+        self._conn_threads: dict[str, set[str]] = {}
         self._user_conns: dict[int, set[str]] = {}
         self._conn_user: dict[str, int] = {}
         self._active_turns: set[str] = set()
@@ -73,23 +73,21 @@ class WebSocketHub:
     def subscribe(self, thread_id: str, connection_id: str) -> None:
         """Add *connection_id* as a subscriber for *thread_id*.
 
-        Switching threads unsubscribes this connection from the previous
-        thread. Other connections on the same thread keep receiving.
+        A connection may follow several in-flight threads at once so
+        switching chats does not drop the previous turn's stream.
         """
         tid = thread_id.strip()
         if not tid or connection_id not in self._connections:
             return
-        prev = self._conn_thread.get(connection_id)
-        if prev == tid:
+        owned = self._conn_threads.setdefault(connection_id, set())
+        if tid in owned:
             return
-        if prev is not None:
-            self._drop_subscriber(prev, connection_id)
+        owned.add(tid)
         self._thread_subscribers.setdefault(tid, set()).add(connection_id)
-        self._conn_thread[connection_id] = tid
 
     def unsubscribe_connection(self, connection_id: str) -> None:
-        tid = self._conn_thread.pop(connection_id, None)
-        if tid is not None:
+        owned = self._conn_threads.pop(connection_id, set())
+        for tid in list(owned):
             self._drop_subscriber(tid, connection_id)
 
     def _drop_subscriber(self, thread_id: str, connection_id: str) -> None:

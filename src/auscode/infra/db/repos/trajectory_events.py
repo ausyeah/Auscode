@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Iterator
 from typing import Any, cast
 
 from auscode.infra.db.pool import DatabasePool
 from auscode.infra.db.repos._base import DbRow, bool_int, sql_in_placeholders
 from auscode.infra.trajectory.types import TrajectoryEvent, TrajectoryKind
+
+logger = logging.getLogger(__name__)
 
 _SELECT_COLS = (
     "event_id, agent_id, thread_id, seq, ts, kind, turn_id, "
@@ -41,61 +44,95 @@ class TrajectoryEventRepo:
     def __init__(self, db: DatabasePool) -> None:
         self._db = db
 
+    @staticmethod
+    def _log_fk_skip(event: TrajectoryEvent) -> None:
+        """Downgrade FK failures to a one-line debug log.
+
+        ``trajectory_events.thread_id`` references ``threads``. Transient
+        producers (CLI one-shot sends, subagent/peer bursts, threads deleted
+        mid-stream) emit chunks before/beyond the threads row, so the insert
+        fails the FK. Trajectory is best-effort observability — skip quietly
+        instead of flooding the log with tracebacks.
+        """
+        logger.debug(
+            "trajectory event skipped (thread missing): thread=%s kind=%s",
+            event.thread_id or "-",
+            event.kind,
+        )
+
     def append(self, event: TrajectoryEvent) -> bool:
+        if not str(event.thread_id or "").strip():
+            self._log_fk_skip(event)
+            return False
         payload_json = json.dumps(event.payload, ensure_ascii=False)
-        with self._db.transaction() as conn:
-            cursor = conn.execute(
-                "INSERT INTO trajectory_events("
-                "event_id, agent_id, thread_id, seq, ts, kind, turn_id, "
-                "request_seq, is_error, summary, payload_json"
-                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
-                "ON CONFLICT DO NOTHING",
-                (
-                    event.event_id,
-                    event.agent_id,
-                    event.thread_id,
-                    event.seq,
-                    event.ts,
-                    event.kind,
-                    event.turn_id,
-                    event.request_seq,
-                    bool_int(event.is_error),
-                    event.summary,
-                    payload_json,
-                ),
-            )
+        try:
+            with self._db.transaction() as conn:
+                cursor = conn.execute(
+                    "INSERT INTO trajectory_events("
+                    "event_id, agent_id, thread_id, seq, ts, kind, turn_id, "
+                    "request_seq, is_error, summary, payload_json"
+                    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                    "ON CONFLICT DO NOTHING",
+                    (
+                        event.event_id,
+                        event.agent_id,
+                        event.thread_id,
+                        event.seq,
+                        event.ts,
+                        event.kind,
+                        event.turn_id,
+                        event.request_seq,
+                        bool_int(event.is_error),
+                        event.summary,
+                        payload_json,
+                    ),
+                )
+        except Exception as exc:
+            if "FOREIGN KEY" in str(exc):
+                self._log_fk_skip(event)
+                return False
+            raise
         return int(cursor.rowcount or 0) > 0
 
     def upsert(self, event: TrajectoryEvent) -> bool:
+        if not str(event.thread_id or "").strip():
+            self._log_fk_skip(event)
+            return False
         payload_json = json.dumps(event.payload, ensure_ascii=False)
-        with self._db.transaction() as conn:
-            cursor = conn.execute(
-                "INSERT INTO trajectory_events("
-                "event_id, agent_id, thread_id, seq, ts, kind, turn_id, "
-                "request_seq, is_error, summary, payload_json"
-                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
-                "ON CONFLICT(event_id) DO UPDATE SET "
-                "ts = excluded.ts, "
-                "kind = excluded.kind, "
-                "turn_id = excluded.turn_id, "
-                "request_seq = excluded.request_seq, "
-                "is_error = excluded.is_error, "
-                "summary = excluded.summary, "
-                "payload_json = excluded.payload_json",
-                (
-                    event.event_id,
-                    event.agent_id,
-                    event.thread_id,
-                    event.seq,
-                    event.ts,
-                    event.kind,
-                    event.turn_id,
-                    event.request_seq,
-                    bool_int(event.is_error),
-                    event.summary,
-                    payload_json,
-                ),
-            )
+        try:
+            with self._db.transaction() as conn:
+                cursor = conn.execute(
+                    "INSERT INTO trajectory_events("
+                    "event_id, agent_id, thread_id, seq, ts, kind, turn_id, "
+                    "request_seq, is_error, summary, payload_json"
+                    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                    "ON CONFLICT(event_id) DO UPDATE SET "
+                    "ts = excluded.ts, "
+                    "kind = excluded.kind, "
+                    "turn_id = excluded.turn_id, "
+                    "request_seq = excluded.request_seq, "
+                    "is_error = excluded.is_error, "
+                    "summary = excluded.summary, "
+                    "payload_json = excluded.payload_json",
+                    (
+                        event.event_id,
+                        event.agent_id,
+                        event.thread_id,
+                        event.seq,
+                        event.ts,
+                        event.kind,
+                        event.turn_id,
+                        event.request_seq,
+                        bool_int(event.is_error),
+                        event.summary,
+                        payload_json,
+                    ),
+                )
+        except Exception as exc:
+            if "FOREIGN KEY" in str(exc):
+                self._log_fk_skip(event)
+                return False
+            raise
         return int(cursor.rowcount or 0) > 0
 
     def list_before(

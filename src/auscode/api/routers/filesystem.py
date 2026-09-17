@@ -17,6 +17,7 @@ Security notes:
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -37,6 +38,7 @@ from auscode.infra.utils.host_dirs import (
     mkdir_host_subdir,
     probe_host_root_dir,
     rename_host_dir,
+    reveal_host_dir,
 )
 
 router = APIRouter()
@@ -211,3 +213,31 @@ async def rename_host_directory(
         )
     except ValueError as exc:
         raise AusCodeError(ErrorCode.WORKSPACE_OP_UNSUPPORTED, str(exc)) from exc
+
+
+@router.post("/open-workspace", summary="Open the agent workspace folder in Explorer")
+async def open_workspace_folder(
+    user: User = Depends(current_user),
+    server: Any = Depends(get_server),
+) -> dict[str, Any]:
+    """Reveal the current agent's saved local workspace directory on this machine."""
+    assert server.app_runtime is not None
+    rows = server.app_runtime.agent_registry.list_agents(user.id)
+    if not rows:
+        raise AusCodeError(ErrorCode.NOT_FOUND, "no agent")
+    try:
+        cfg = server.app_runtime.agent_registry.get_config(rows[0].agent_id)
+    except Exception:
+        cfg = {}
+    backend = cfg.get("backend") if isinstance(cfg, dict) else None
+    raw = ""
+    if isinstance(backend, dict):
+        raw = str(backend.get("root_dir") or "").strip()
+    if not raw:
+        raw = str(Path.home())
+    allowed = _user_workspace_root(server, user)
+    try:
+        opened = await asyncio.to_thread(reveal_host_dir, raw, restrict_to_root=allowed)
+    except ValueError as e:
+        raise AusCodeError(ErrorCode.WORKSPACE_OP_UNSUPPORTED, str(e)) from e
+    return {"ok": True, "path": opened}

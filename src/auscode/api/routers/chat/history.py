@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,7 @@ from auscode.api.routers.chat.serialize import (
     _backfill_thread_projection,
     _clamp_history_limit,
     _load_projected_thread_messages,
+    _load_thread_messages_from_sessions,
 )
 from auscode.infra.agents.context_breakdown import SEGMENT_KEYS, compute_context_breakdown
 from auscode.infra.agents.middleware.thread_artifacts import artifacts_for_response
@@ -92,57 +94,155 @@ def _require_thread(
     return row
 
 
-def _titles_from_session_jsonl(workspace_root: Path) -> dict[str, str]:
-    titles: dict[str, str] = {}
-    sessions_dir = workspace_root / ".auscode" / "sessions"
-    if not sessions_dir.is_dir():
-        return titles
-    for path in sessions_dir.glob("*.jsonl"):
-        try:
-            for line in path.read_text(encoding="utf-8").splitlines():
-                if '"role": "user"' not in line and '"role":"user"' not in line:
-                    continue
-                rec = json.loads(line)
-                tid = str(rec.get("thread_id") or "")
-                if tid and tid not in titles:
-                    content = rec.get("content") or ""
-                    if isinstance(content, list):
-                        content = " ".join(
-                            str(p.get("text") or "") for p in content if isinstance(p, dict)
-                        )
-                    text = " ".join(str(content).split())
-                    if text:
-                        titles[tid] = text[:40]
-        except (OSError, ValueError):
+def _jsonl_preview(content: Any) -> str:
+    if isinstance(content, list):
+        content = " ".join(str(p.get("text") or "") for p in content if isinstance(p, dict))
+    return " ".join(str(content or "").split())
+
+
+def _jsonl_thread_index(workspace_root: Path) -> dict[str, dict[str, Any]]:
+    """First user line + latest timestamp per thread_id in workspace session logs."""
+    index: dict[str, dict[str, Any]] = {}
+    dirs = [
+        workspace_root / ".auscode" / "sessions",
+        workspace_root / "sessions",
+    ]
+    for sessions_dir in dirs:
+        if not sessions_dir.is_dir():
             continue
-    return titles
+        for path in sessions_dir.glob("*.jsonl"):
+            try:
+                for line in path.read_text(encoding="utf-8").splitlines():
+                    rec = json.loads(line)
+                    if not isinstance(rec, dict):
+                        continue
+                    tid = str(rec.get("thread_id") or "")
+                    if not tid:
+                        continue
+                    row = index.setdefault(
+                        tid,
+                        {"title": None, "last_active": 0, "channel_type": "dashboard"},
+                    )
+                    source = str(rec.get("source") or "")
+                    if "cli" in source.lower():
+                        row["channel_type"] = "cli"
+                    ts = rec.get("ts")
+                    if isinstance(ts, str):
+                        try:
+                            unix = int(datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp())
+                            if unix > int(row["last_active"] or 0):
+                                row["last_active"] = unix
+                        except ValueError:
+                            pass
+                    if rec.get("role") != "user" or row["title"]:
+                        continue
+                    text = _jsonl_preview(rec.get("content"))
+                    if text:
+                        row["title"] = text[:40]
+            except (OSError, ValueError):
+                continue
+    return index
+
+
+def _titles_from_session_jsonl(workspace_root: Path) -> dict[str, str]:
+    return {
+        tid: str(row["title"])
+        for tid, row in _jsonl_thread_index(workspace_root).items()
+        if row.get("title")
+    }
+
+
+def _purge_thread_from_session_jsonl(workspace_root: Path, thread_id: str) -> None:
+    """Drop jsonl lines for a deleted thread so list repair cannot resurrect it."""
+    if not thread_id:
+        return
+    dirs = [
+        workspace_root / ".auscode" / "sessions",
+        workspace_root / "sessions",
+    ]
+    for sessions_dir in dirs:
+        if not sessions_dir.is_dir():
+            continue
+        for path in sessions_dir.glob("*.jsonl"):
+            try:
+                kept: list[str] = []
+                changed = False
+                for line in path.read_text(encoding="utf-8").splitlines():
+                    try:
+                        rec = json.loads(line)
+                    except ValueError:
+                        kept.append(line)
+                        continue
+                    if isinstance(rec, dict) and str(rec.get("thread_id") or "") == thread_id:
+                        changed = True
+                        continue
+                    kept.append(line)
+                if changed:
+                    path.write_text(("\n".join(kept) + ("\n" if kept else "")), encoding="utf-8")
+            except OSError:
+                logger.warning("failed to purge session log %s for thread %s", path, thread_id, exc_info=True)
 
 
 def _repair_missing_thread_rows(server: Any, *, agent_id: str, user_id: int) -> None:
-    """Reinsert thread metadata when sessions still point at missing thread rows."""
+    """Reinsert thread metadata when sessions or jsonl still have missing thread rows."""
     from auscode.infra.agents.workspace_dir import workspace_dir_from_config
 
-    sessions = server.services.session_repo.list_by_agent(agent_id, limit=200)
-    if not sessions:
-        return
     cfg = server.app_runtime.agent_registry.get_config(agent_id)
     workspace = workspace_dir_from_config(cfg, paths=server.paths, agent_id=agent_id)
-    titles = _titles_from_session_jsonl(workspace)
+    index = _jsonl_thread_index(workspace)
     repo = server.services.thread_repo
+    dashboard_key = ThreadRegistry.dashboard_key(agent_id=agent_id, user_id=user_id)
+    cli_key = ThreadRegistry.cli_key(agent_id=agent_id, user_id=user_id)
+    sessions = server.services.session_repo.list_by_agent(agent_id, limit=200)
     for sess in sessions:
         if sess.user_id != user_id or not sess.thread_id:
             continue
-        if repo.get(sess.thread_id) is not None:
+        if sess.channel_type == ThreadRegistry.CHANNEL_CLI:
             continue
-        repo.insert(
-            thread_id=sess.thread_id,
-            agent_id=agent_id,
-            user_id=user_id,
-            channel_type=sess.channel_type or "dashboard",
-            session_key=sess.session_key,
-            title=titles.get(sess.thread_id),
-            last_active=sess.updated_at or None,
-        )
+        meta = index.get(sess.thread_id) or {}
+        existing = repo.get(sess.thread_id)
+        if existing is None:
+            repo.insert(
+                thread_id=sess.thread_id,
+                agent_id=agent_id,
+                user_id=user_id,
+                channel_type=sess.channel_type or "dashboard",
+                session_key=sess.session_key,
+                title=meta.get("title"),
+                last_active=meta.get("last_active") or sess.updated_at or None,
+            )
+            continue
+        if (not existing.title or existing.last_active == 0) and (
+            meta.get("title") or meta.get("last_active")
+        ):
+            repo.restore_activity(
+                sess.thread_id,
+                title=meta.get("title"),
+                last_active=int(meta.get("last_active") or existing.last_active or 0),
+            )
+    for tid, meta in index.items():
+        existing = repo.get(tid)
+        channel_type = str(meta.get("channel_type") or "dashboard")
+        session_key = cli_key if channel_type == "cli" else dashboard_key
+        if existing is None:
+            repo.insert(
+                thread_id=tid,
+                agent_id=agent_id,
+                user_id=user_id,
+                channel_type=channel_type,
+                session_key=session_key,
+                title=meta.get("title"),
+                last_active=meta.get("last_active") or None,
+            )
+            continue
+        if (not existing.title or existing.last_active == 0) and (
+            meta.get("title") or meta.get("last_active")
+        ):
+            repo.restore_activity(
+                tid,
+                title=meta.get("title"),
+                last_active=int(meta.get("last_active") or existing.last_active or 0),
+            )
 
 
 @router.get("/agents/{agent_id}/threads", summary="List threads")
@@ -163,24 +263,28 @@ async def list_threads(
         ThreadRegistry.dashboard_key(agent_id=agent_id, user_id=effective_uid)
     )
     workspace_dir = _agent_facing_workspace_dir(server, agent_id)
-    return [
-        {
-            "thread_id": r.thread_id,
-            "title": r.title,
-            "channel_type": r.channel_type,
-            "session_key": r.session_key,
-            "last_active": r.last_active,
-            "created_at": r.created_at,
-            "is_active": r.thread_id == bound,
-            "has_messages": thread_row_has_messages(r),
-            "pinned": r.pinned,
-            "model_ref": r.model_ref,
-            "reasoning_mode": r.reasoning_mode,
-            "reasoning_effort": r.reasoning_effort,
-            "artifacts": artifacts_for_response(r.artifacts, workspace_dir),
-        }
-        for r in rows
-    ]
+    visible = []
+    for r in rows:
+        if r.channel_type == ThreadRegistry.CHANNEL_CLI and not thread_row_has_messages(r):
+            continue
+        visible.append(
+            {
+                "thread_id": r.thread_id,
+                "title": r.title,
+                "channel_type": r.channel_type,
+                "session_key": r.session_key,
+                "last_active": r.last_active,
+                "created_at": r.created_at,
+                "is_active": r.thread_id == bound,
+                "has_messages": thread_row_has_messages(r),
+                "pinned": r.pinned,
+                "model_ref": r.model_ref,
+                "reasoning_mode": r.reasoning_mode,
+                "reasoning_effort": r.reasoning_effort,
+                "artifacts": artifacts_for_response(r.artifacts, workspace_dir),
+            }
+        )
+    return visible
 
 
 @router.get(
@@ -410,6 +514,17 @@ async def get_thread_history(
                 offset=page_offset,
                 user=user,
             )
+    if not messages:
+        fallback, fallback_more = await _load_thread_messages_from_sessions(
+            server,
+            agent_id,
+            thread_id,
+            page_limit,
+            offset=page_offset,
+            user=user,
+        )
+        if fallback:
+            messages, has_more = fallback, fallback_more
     effective_uid = as_user if as_user is not None else user.id
     hitl_pending = pending_hitl_payload(
         server.app_runtime.gateway.processor.hitl_coordinator.store,
@@ -626,6 +741,11 @@ async def delete_thread(
     """
     _require_thread(server, agent_id, thread_id, user, as_user)
     await server.app_runtime.agent_registry.delete_thread_checkpoint(agent_id, thread_id)
+    from auscode.infra.agents.workspace_dir import workspace_dir_from_config
+
+    cfg = server.app_runtime.agent_registry.get_config(agent_id)
+    workspace = workspace_dir_from_config(cfg, paths=server.paths, agent_id=agent_id)
+    _purge_thread_from_session_jsonl(workspace, thread_id)
     server.app_runtime.gateway.thread_registry.delete_thread(thread_id)
     runtime = getattr(server, "app_runtime", None)
     trajectory = getattr(runtime, "trajectory_service", None) if runtime is not None else None

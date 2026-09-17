@@ -6,6 +6,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from auscode.infra.agents.web_search_policy import resolve_web_search_tools, searchfree_enabled
+
 # Tools that must remain available; ignored if present in ``tools_disabled``.
 CRITICAL_TOOLS: frozenset[str] = frozenset(
     {
@@ -202,7 +204,15 @@ def builtin_tool_available(
             return False
         return not (isinstance(media, dict) and media.get("enabled") is False)
     if name in _WEB_SEARCH_TOOLS:
-        return agent_cfg.get("web_search_tools") is not False
+        policy = resolve_web_search_tools(agent_cfg)
+        if name == "searchfree_search":
+            return searchfree_enabled(agent_cfg)
+        if policy is False:
+            return False
+        if isinstance(policy, list):
+            prefix = name[: -len("_search")] if name.endswith("_search") else name
+            return prefix in policy
+        return True
     if name == "acp_runner":
         acp = agent_cfg.get("acp")
         if isinstance(acp, dict):

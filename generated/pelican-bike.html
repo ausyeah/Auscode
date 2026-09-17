@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>鹈鹕骑自行车</title>
+<style>
+  body {
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(#aee3f5 0%, #d8f2fc 60%, #e8f7e0 60%, #cdeab8 100%);
+    overflow: hidden;
+    font-family: sans-serif;
+  }
+  .scene { width: 600px; height: 400px; position: relative; }
+
+  /* 地面滚动虚线 */
+  .ground {
+    position: absolute;
+    bottom: 70px; left: 0;
+    width: 200%; height: 4px;
+    background: repeating-linear-gradient(90deg, #8a9a6a 0 40px, transparent 40px 80px);
+    animation: ground 0.6s linear infinite;
+  }
+  @keyframes ground { from { transform: translateX(0); } to { transform: translateX(-80px); } }
+
+  .bike {
+    position: absolute;
+    bottom: 74px; left: 50%;
+    transform: translateX(-50%);
+    width: 320px; height: 240px;
+  }
+
+  /* 车轮 */
+  .wheel {
+    position: absolute; bottom: 0;
+    width: 110px; height: 110px;
+    border: 8px solid #333;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+  .wheel::before {
+    content: ""; position: absolute;
+    inset: 12px;
+    border: 3px dashed #777;
+    border-radius: 50%;
+  }
+  .wheel::after {
+    content: ""; position: absolute;
+    left: 50%; top: 50%;
+    width: 14px; height: 14px;
+    margin: -7px 0 0 -7px;
+    background: #555;
+    border-radius: 50%;
+  }
+  .front { right: 0; }
+  .rear  { left: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* 车架 */
+  .frame {
+    position: absolute; bottom: 52px; left: 20px;
+    width: 240px; height: 120px;
+  }
+  .frame div { position: absolute; background: #e74c3c; border-radius: 4px; }
+  .f1 { width: 180px; height: 8px; transform: rotate(-18deg); left: 30px; top: 40px; }
+  .f2 { width: 130px; height: 8px; transform: rotate(35deg);  left: 60px; top: 78px; }
+  .f3 { width: 8px;   height: 70px; left: 48px;  top: 5px; }
+  .f4 { width: 8px;   height: 60px; left: 195px; top: 8px; transform: rotate(10deg); }
+  .seat { position: absolute; left: 30px; top: -8px; width: 46px; height: 14px; background: #3b2b20; border-radius: 8px; }
+  .handle {
+    position: absolute; left: 192px; top: -26px;
+    width: 52px; height: 10px; background: #333; border-radius: 6px;
+    transform: rotate(-8deg);
+  }
+
+  /* 蹬腿动画的脚 */
+  .leg {
+    position: absolute; left: 105px; top: 95px;
+    width: 55px; height: 8px; background: #f39c12; border-radius: 4px;
+    transform-origin: left center;
+    animation: pedal 0.6s linear infinite;
+  }
+  .leg.b { animation-delay: -0.3s; }
+  @keyframes pedal {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  /* 鹈鹕 */
+  .pelican {
+    position: absolute; bottom: 118px; left: 55px;
+    width: 150px; height: 170px;
+    animation: bob 0.6s ease-in-out infinite;
+  }
+  @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+
+  .body {
+    position: absolute; bottom: 0; left: 10px;
+    width: 110px; height: 90px;
+    background: #fff;
+    border: 4px solid #ccc;
+    border-radius: 50% 50% 45% 45%;
+  }
+  .wing {
+    position: absolute; bottom: 30px; left: 30px;
+    width: 70px; height: 42px;
+    background: #f5f5f0;
+    border: 4px solid #ccc;
+    border-radius: 60% 40% 50% 50%;
+    transform-origin: top right;
+    animation: flap 0.6s ease-in-out infinite;
+  }
+  @keyframes flap { 0%,100% { transform: rotate(0deg); } 50% { transform: rotate(-8deg); } }
+
+  .neck {
+    position: absolute; bottom: 80px; left: 68px;
+    width: 26px; height: 60px;
+    background: #fff;
+    border: 4px solid #ccc;
+    border-radius: 14px;
+    transform: rotate(8deg);
+  }
+  .head {
+    position: absolute; bottom: 128px; left: 55px;
+    width: 46px; height: 40px;
+    background: #fff;
+    border: 4px solid #ccc;
+    border-radius: 50%;
+  }
+  .eye {
+    position: absolute; bottom: 148px; left: 78px;
+    width: 9px; height: 9px;
+    background: #222; border-radius: 50%;
+  }
+  .beak {
+    position: absolute; bottom: 132px; left: 88px;
+    width: 72px; height: 14px;
+    background: #f5a623;
+    border-radius: 4px 12px 12px 4px;
+    transform: rotate(-6deg);
+  }
+  .pouch {
+    position: absolute; bottom: 118px; left: 92px;
+    width: 52px; height: 24px;
+    background: #f7b944;
+    border-radius: 6px 6px 20px 20px;
+    transform: rotate(-4deg);
+  }
+</style>
+</head>
+<body>
+  <div class="scene">
+    <div class="ground"></div>
+    <div class="bike">
+      <div class="wheel front"></div>
+      <div class="wheel rear"></div>
+      <div class="frame">
+        <div class="f1"></div><div class="f2"></div>
+        <div class="f3"></div><div class="f4"></div>
+        <div class="seat"></div>
+        <div class="handle"></div>
+        <div class="leg"></div>
+        <div class="leg b"></div>
+      </div>
+      <div class="pelican">
+        <div class="body"></div>
+        <div class="wing"></div>
+        <div class="neck"></div>
+        <div class="head"></div>
+        <div class="eye"></div>
+        <div class="beak"></div>
+        <div class="pouch"></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

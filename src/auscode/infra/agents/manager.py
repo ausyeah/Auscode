@@ -43,6 +43,8 @@ from auscode.infra.agents.runtime_limits import (
     apply_agent_runtime_to_stream_request,
     merge_agent_runtime_values,
 )
+from auscode.infra.agents.searchfree_guard import install_searchfree_guard
+from auscode.infra.agents.web_search_policy import WEB_LOOKUP_PROMPT, resolve_web_search_tools
 from auscode.infra.agents.runtime_limits import (
     resolve_context_max_tokens as config_context_max_tokens,
 )
@@ -1974,8 +1976,29 @@ class AgentManager:
             self.sync_skill_package_dirs(row.agent_id)
 
     def resolve_context_max_tokens(self, agent_id: str, *, fallback: int = 128_000) -> int:
-        """Return the configured context cap for *agent_id* (``max_input_length``)."""
-        return config_context_max_tokens(self.get_config(agent_id), fallback=fallback)
+        """Prefer the active model's window, then agent ``max_input_length``."""
+        cfg = self.get_config(agent_id)
+        override = config_context_max_tokens(cfg, fallback=0)
+        if override:
+            return override
+        row = self.get_row(agent_id)
+        model_ref = (getattr(row, "default_model", None) or "").strip()
+        if "/" in model_ref:
+            provider_name, model_id = model_ref.split("/", 1)
+            for provider in self.providers.iter_usable_rows():
+                if str(getattr(provider, "name", "")) != provider_name:
+                    continue
+                for model in provider.get_models():
+                    if str(model.get("id") or "") != model_id:
+                        continue
+                    window = model.get("context_window") or model.get("max_input_tokens")
+                    try:
+                        n = int(window or 0)
+                    except (TypeError, ValueError):
+                        n = 0
+                    if n > 0:
+                        return n
+        return fallback
 
     async def list_skill_summaries(
         self,
@@ -2267,9 +2290,17 @@ class AgentManager:
         row = self._repos.agent_repo.get(agent_id)
         if row is None:
             return
-        agent._config.system_prompt = row.system_prompt
+        extra = (
+            "Do not read USER.md, MEMORY.md, or AGENTS.md unless the user "
+            "explicitly asks to read memory, or the current message hits a "
+            "memory keyword (preference, past decision, local path, account, "
+            "or project convention). Ordinary chat must not open those files.\n\n"
+            + WEB_LOOKUP_PROMPT
+        )
+        prompt = row.system_prompt or ""
+        agent._config.system_prompt = f"{prompt.rstrip()}\n\n{extra}".strip()
         if agent._config.memory == ():
-            agent._config.memory = None
+            agent._config.memory = []
         self._bootstrap_graph_refresh_pending.add(agent_id)
         logger.info(
             "Bootstrap complete for agent %s — graph refresh deferred to next turn",
@@ -2658,6 +2689,7 @@ class AgentManager:
             cfg = self._agent_config_dict(row)
 
         backend = self._backend_spec_for_row(row, cfg=cfg, workspace_dir=workspace_dir)
+        install_searchfree_guard()
         ws = self._backend_workspace_for_row(
             row,
             cfg=cfg,
@@ -2791,10 +2823,25 @@ class AgentManager:
         acp_config = ACPConfig.from_dict({"runners": runners_dict})
 
         system_prompt = row.system_prompt
-        memory: tuple[str, ...] | None = None
+        # Empty list: do not auto-inject USER.md / MEMORY.md / AGENTS.md each turn.
+        # Empty tuple remains bootstrap suppression until onboarding finishes.
+        memory: tuple[str, ...] | list[str] | None
         if not bootstrap_marker_exists(ws):
             system_prompt = None
             memory = ()
+        else:
+            memory = []
+            extra = (
+                "Do not read USER.md, MEMORY.md, or AGENTS.md unless the user "
+                "explicitly asks to read memory, or the current message hits a "
+                "memory keyword (preference, past decision, local path, account, "
+                "or project convention). Ordinary chat must not open those files.\n\n"
+                + WEB_LOOKUP_PROMPT
+            )
+            if system_prompt:
+                system_prompt = f"{system_prompt.rstrip()}\n\n{extra}"
+            else:
+                system_prompt = extra
 
         uid = self._connector_uid_for(row)
         mcp_server_configs: dict[str, Any] = {}
@@ -2887,6 +2934,8 @@ class AgentManager:
             default_timezone=self._config.default_timezone,
             log_dir=str(self.paths.logs_dir),
             media_generation=self._media_generation.harness_config(),
+            web_search_tools=resolve_web_search_tools(cfg),
+            memory_recall_inject_enabled=False,
             **_memory_extract_settings(cfg, is_ref_usable=self._providers.is_model_ref_usable),
             **_resolve_memory_backend_kwargs(cfg, workspace_dir=workspace_dir, config=self._config),
         )

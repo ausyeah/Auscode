@@ -4,28 +4,72 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AusCode</title>
-  <link rel="stylesheet" href="/ui-assets/styles.css?v=29" />
+  <link rel="stylesheet" href="/ui-assets/styles.css?v=83" />
+  <link rel="stylesheet" href="/ui-assets/vendor/katex/katex.min.css" />
 </head>
 <body>
   <div class="app">
     <aside class="rail">
-      <div class="brand"><b>AusCode</b><span>桌面助手</span></div>
+      <div class="brand">
+        <a class="brand-avatar-link" href="https://github.com/ausyeah" target="_blank" rel="noopener noreferrer" title="GitHub">
+          <img class="brand-avatar" src="/ui-assets/assets/brand-avatar.jpg" alt="Ausyeah" />
+        </a>
+        <div class="brand-text">
+          <b>AusCode</b><span>Agent Tool</span>
+        </div>
+        <button type="button" class="ghost rail-toggle" id="railToggle" title="收起侧栏" aria-label="收起侧栏">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
+        </button>
+      </div>
       <nav class="nav" id="nav">
-        <button data-page="chat" class="active">对话</button>
-        <button data-page="cron">自动化</button>
-        <button data-page="usage">Token 统计</button>
-        <button data-page="memory">记忆</button>
-        <button data-page="models">模型</button>
-        <button data-page="skills">技能</button>
-        <button data-page="security">权限</button>
-        <button data-page="settings">设置</button>
+        <button data-page="chat" class="active" title="对话">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg>
+          <span>对话</span>
+        </button>
+        <button data-page="cron" title="自动化">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          <span>自动化</span>
+        </button>
+        <button data-page="usage" title="Token 统计">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16V10"/><path d="M12 16V7"/><path d="M16 16v-4"/></svg>
+          <span>Token 统计</span>
+        </button>
+        <button data-page="memory" title="记忆">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a7 7 0 0 0-4 12.9V19a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-3.1A7 7 0 0 0 12 3z"/><path d="M9 22h6"/></svg>
+          <span>记忆</span>
+        </button>
+        <button data-page="models" title="模型">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h.01"/><path d="M15 9h.01"/><path d="M9 15h.01"/><path d="M15 15h.01"/></svg>
+          <span>模型</span>
+        </button>
+        <button data-page="skills" title="技能">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.4 7.2H22l-6 4.8 2.4 7.2L12 16.8 5.6 21.2 8 14 2 9.2h7.6z"/></svg>
+          <span>技能</span>
+        </button>
+        <button data-page="plugins" title="插件">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v4"/><path d="M8 6h8"/><rect x="6" y="10" width="12" height="10" rx="2"/><path d="M10 14h4"/></svg>
+          <span>插件</span>
+        </button>
+        <button data-page="security" title="权限">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+          <span>权限</span>
+        </button>
+        <button data-page="settings" title="设置">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+          <span>设置</span>
+        </button>
       </nav>
-      <div class="usage-card" id="usageMini">
+      <div class="usage-card usage-pop" id="usageMini" title="近 5 小时用量">
         <h4>近 5 小时</h4>
         <div class="big" id="usage5h">—</div>
-        <p id="usageIo">入 — / 出 —</p>
-        <p id="usageToday">今日 入 — / 出 —</p>
+        <p id="usageIo">入 — token / 出 — token</p>
+        <p id="usageHit">缓存命中 —</p>
+        <p id="usageToday">今日 入 — token / 出 — token</p>
       </div>
+      <button type="button" class="ghost folder-btn" id="openWorkspaceBtn" title="打开工作区文件夹">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/></svg>
+        <span>工作区</span>
+      </button>
     </aside>
     <main class="stage">
       <header class="topbar">
@@ -41,14 +85,16 @@
 
       <section class="page chat active" id="page-chat">
         <div class="card threads" id="threadList"></div>
+        <div class="split-handle" id="threadSplit" title="左右拖动调节宽度"></div>
         <div class="card chat-main">
           <div class="stats">
-            <div class="ctx-pop">上下文 <b id="ctxPct">—</b>
-              <div class="ctx-menu" id="ctxMenu">把鼠标放在「上下文」上看分段</div>
+            <div class="stats-left">
+              <div class="ctx-pop" id="ctxPop">上下文 <b id="ctxPct">—</b></div>
+              <div class="ctx-pop" id="speedPop">速度 <b id="tokSpeed">—</b></div>
+              <div>本轮 <b id="turnUsage">入 — token / 出 — token</b></div>
+              <div>缓存 <b id="turnCache">—</b></div>
             </div>
-            <div>速度 <b id="tokSpeed">—</b></div>
-            <div>本轮 <b id="turnUsage">—</b></div>
-            <div>缓存 <b id="turnCache">—</b></div>
+            <div class="ctx-pop plan-pop hidden" id="planPop">计划 <b id="planCount">—</b></div>
           </div>
           <div class="messages" id="messages"></div>
           <div class="composer">
@@ -70,11 +116,35 @@
                 </div>
               </div>
             </div>
+            <div class="goal-bar hidden" id="goalBar">
+              <span class="goal-dot" id="goalDot"></span>
+              <span class="goal-status" id="goalStatus">目标</span>
+              <span class="goal-text" id="goalText"></span>
+              <span class="goal-time" id="goalTime">0秒</span>
+              <button type="button" class="ghost icon-btn" id="goalEdit" title="把当前目标放到输入框里改">✎</button>
+              <button type="button" class="ghost icon-btn" id="goalPause" title="暂停">⏸</button>
+              <button type="button" class="ghost icon-btn hidden" id="goalResume" title="继续">▶</button>
+              <button type="button" class="ghost icon-btn" id="goalClear" title="结束目标">🗑</button>
+            </div>
+            <div class="composer-chips" id="composerChips"></div>
             <div class="row slash-wrap">
-              <textarea id="prompt" placeholder="输入 / 引用技能或命令"></textarea>
-              <button class="ghost polish-btn" id="polishBtn" title="优化提示词">✨</button>
-              <button class="ghost hidden" id="undoPolishBtn" title="撤回优化">↩</button>
+              <div class="plus-wrap">
+                <button class="ghost plus-btn" id="plusBtn" title="添加">+</button>
+                <div class="menu plus-menu" id="plusMenu">
+                  <button type="button" data-plus="file"><b>添加附件</b><small>图片、文档，也可直接拖进输入框</small></button>
+                  <button type="button" data-plus="thread"><b>@ 接上另一条对话</b><small>把那条对话当上下文继续</small></button>
+                  <button type="button" data-plus="skill"><b>$ 召唤技能</b><small>选一个 skill 带进这一轮</small></button>
+                </div>
+              </div>
+              <textarea id="prompt" placeholder="输入 / 召唤技能，或把文件拖进来"></textarea>
+              <input type="file" id="filePick" class="hidden" multiple />
+              <div class="composer-side">
+                <button class="ghost goal-btn" id="goalBtn" title="设为目标，完成后才停">🎯</button>
+                <button class="ghost polish-btn" id="polishBtn" title="优化提示词">✨</button>
+                <button class="ghost hidden" id="undoPolishBtn" title="撤回优化">↩</button>
+              </div>
               <button class="primary" id="sendBtn">发送</button>
+              <button class="ghost stop-btn hidden" id="stopBtn" title="停止本轮">停止</button>
             </div>
           </div>
         </div>
@@ -85,11 +155,11 @@
       <section class="page" id="page-memory"><div class="card panel" id="memoryBox"></div></section>
       <section class="page" id="page-models"><div class="card panel" id="modelsBox"></div></section>
       <section class="page" id="page-skills"><div class="card panel" id="skillsBox"></div></section>
+      <section class="page" id="page-plugins"><div class="card panel" id="pluginsBox"></div></section>
       <section class="page" id="page-security"><div class="card panel" id="securityBox"></div></section>
       <section class="page" id="page-settings">
         <div class="card settings">
-          <h3>工作区</h3>
-          <p style="color:var(--muted);margin:0">助手读写文件的根目录。Windows 不能设成整台电脑（跨盘符不安全），可以设成用户主目录，相当于常用文件都够得到。</p>
+          <div class="page-head"><h3>工作区</h3><p class="lead">助手读写文件的根目录。Windows 不能设成整台电脑，可以设成用户主目录。</p></div>
           <div id="wsCurrent" style="color:var(--muted)"></div>
           <div class="row">
             <button class="ghost" id="wsHome">改到用户主目录</button>
@@ -106,6 +176,12 @@
     </main>
   </div>
   <div id="slashMenu" class="slash-menu hidden"></div>
-  <script src="/ui-assets/app.js?v=29"></script>
+  <div class="float-menu hidden" id="usageMenu">把鼠标放在用量上看分段</div>
+  <div class="float-menu hidden" id="ctxMenu">把鼠标放在「上下文」上看分段</div>
+  <div class="float-menu hidden" id="speedMenu">把鼠标放在「速度」上看本轮用量</div>
+  <div class="float-menu hidden" id="planMenu">把鼠标放在「计划」上看本轮清单</div>
+  <script src="/ui-assets/vendor/katex/katex.min.js"></script>
+  <script src="/ui-assets/markdown.js?v=82"></script>
+  <script src="/ui-assets/app.js?v=82"></script>
 </body>
 </html>
