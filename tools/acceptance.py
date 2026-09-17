@@ -18,6 +18,11 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+# 中文 Windows 控制台默认 GBK，打印 ✅/❌ 会 UnicodeEncodeError；强制 UTF-8 输出。
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 HOME = Path(__file__).resolve().parent.parent
 ALLOWED_BASE = "http://127.0.0.1:8089"  # 唯一允许的目标（本机验收）
 ALLOWED_HOST = "127.0.0.1"
